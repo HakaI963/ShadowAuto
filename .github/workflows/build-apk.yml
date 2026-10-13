@@ -1,0 +1,71 @@
+name: Build APK (OCR)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK, NDK and CMake
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-36
+            build-tools;36.0.0
+            ndk;23.1.7779620
+            cmake;3.22.1
+
+      - name: Cache Gradle
+        uses: gradle/gradle-build-action@v3
+
+      - name: Cache Paddle Lite OCR assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/paddler-ocr/PaddleLite
+            **/paddler-ocr/OpenCV
+            **/paddler-ocr/PaddleOcrAssets
+            **/paddler-ocr/cache
+          key: paddle-ocr-${{ runner.os }}-${{ hashFiles('**/paddler-ocr/build.gradle') }}
+          restore-keys: |
+            paddle-ocr-${{ runner.os }}-
+
+      - name: Build release APKs (OCR enabled)
+        env:
+          ORG_GRADLE_PROJECT_enablePaddleLiteOcr: "true"
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease -PenablePaddleLiteOcr=true --no-daemon --stacktrace
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadowauto-apks
+          path: |
+            **/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          files: |
+            **/build/outputs/apk/release/*.apk
