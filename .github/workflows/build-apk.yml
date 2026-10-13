@@ -68,11 +68,21 @@ jobs:
           done
           ls -lh signed-apks
 
+      - name: Prepare and package OCR runtime
+        run: |
+          ./gradlew :android-shell:syncWebLauncherArtifacts -PenablePaddleLiteOcr=true --no-daemon
+          cd web-launcher/static
+          zip -r "$GITHUB_WORKSPACE/ocr-runtime.zip" ocr
+          cd "$GITHUB_WORKSPACE"
+          ls -lh ocr-runtime.zip
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: shadowauto-apks
-          path: signed-apks/*.apk
+          path: |
+            signed-apks/*.apk
+            ocr-runtime.zip
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -80,4 +90,6 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
-          files: signed-apks/*.apk
+          files: |
+            signed-apks/*.apk
+            ocr-runtime.zip
