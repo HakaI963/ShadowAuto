@@ -63,9 +63,7 @@ jobs:
           ZIPALIGN="$(ls "$ANDROID_SDK_ROOT"/build-tools/*/zipalign | tail -n 1)"
           for apk in $(find . -path '*/build/outputs/apk/release/*-release-unsigned.apk'); do
             base="$(basename "$apk" -release-unsigned.apk)"
-            tmp="signed-apks/${base}-release-unsigned.apk"
-            cp "$apk" "$tmp"
-            "$ZIPALIGN" -f -p 4 "$tmp" "signed-apks/${base}-release.apk"
+            "$ZIPALIGN" -f -p 4 "$apk" "signed-apks/${base}-release.apk"
             "$APKSIGNER" sign --ks release.keystore --ks-pass pass:shadowauto --key-pass pass:shadowauto "signed-apks/${base}-release.apk"
           done
           ls -lh signed-apks
