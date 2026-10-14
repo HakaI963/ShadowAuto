@@ -664,8 +664,20 @@ final class AutomationEngine {
     private PaddleOcrEngine getOcrEngine() throws Exception {
         if (ocr == null) {
             logs.logcat(null, "ocr_engine_init_begin");
-            ocr = new PaddleOcrEngine();
-            ocr.init();
+            PaddleOcrEngine engine = new PaddleOcrEngine();
+            try {
+                engine.init();
+            } catch (Throwable e) {
+                // Do NOT keep the dead engine: a failed init must be retried
+                // on the next call (e.g. after the user redeploys OCR files).
+                // Otherwise every later call fails with "not initialized".
+                try {
+                    engine.close();
+                } catch (Throwable ignored) {
+                }
+                throw e;
+            }
+            ocr = engine;
             logs.logcat(null, "ocr_engine_init_done");
         }
         return ocr;
