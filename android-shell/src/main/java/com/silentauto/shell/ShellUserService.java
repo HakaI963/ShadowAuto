@@ -45,6 +45,13 @@ public class ShellUserService extends Binder {
         started = true;
         if (context != null) {
             try {
+                String nativeDir = context.getApplicationInfo().nativeLibraryDir;
+                com.silentauto.tessocr.TessOcrEngine.nativeLibDirOverride = nativeDir;
+                android.util.Log.i(TAG, "native lib dir: " + nativeDir);
+            } catch (Throwable e) {
+                android.util.Log.w(TAG, "no native lib dir: " + e.getMessage());
+            }
+            try {
                 // Redeploy as shell so OCR files are shell-owned and readable
                 // in this process (app-deployed copies may carry the wrong
                 // UID/SELinux label).

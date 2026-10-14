@@ -745,8 +745,8 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             if (detail == null || detail.isEmpty()) {
                 ocrStatus.setText(getString(R.string.ocr_missing));
             } else {
-                if (detail.length() > 120) {
-                    detail = detail.substring(0, 120) + "…";
+                if (detail.length() > 500) {
+                    detail = detail.substring(0, 500) + "…";
                 }
                 ocrStatus.setText(getString(R.string.ocr_broken, detail));
             }

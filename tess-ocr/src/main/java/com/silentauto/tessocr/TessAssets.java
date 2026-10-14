@@ -76,7 +76,9 @@ public final class TessAssets {
     private static void copyAsset(AssetManager assets, String assetPath, File dest,
                                   StringBuilder log, boolean force) {
         try {
-            if (!force && dest.isFile() && dest.length() > 0) {
+            // traineddata files are tens of MB; anything smaller is a
+            // truncated copy from an interrupted deploy, so redo it.
+            if (!force && dest.isFile() && dest.length() > 1000000) {
                 accessibleFile(dest, false);
                 return;
             }

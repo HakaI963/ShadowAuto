@@ -28,16 +28,34 @@ public final class TessOcrEngine implements AutoCloseable {
     static final String[] LIB_LOAD_NAMES = {"c++_shared", "jpeg", "pngx", "leptonica", "tesseract"};
     static final String[] LANG_FILES = {"chi_sim.traineddata", "eng.traineddata"};
 
+    /**
+     * Set by whoever starts the shell process with a Context (ShellUserService)
+     * so the engine can also try the app's extracted native libs, which carry
+     * a friendlier SELinux label than /data/local/tmp copies.
+     */
+    public static volatile String nativeLibDirOverride;
+
     private TessBaseAPI api;
     private int pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO;
 
     public static boolean isNativeAvailable() {
         try {
-            loadLibraries(new File(DEFAULT_LIB_DIR));
+            loadLibraries(new File(DEFAULT_LIB_DIR), nativeLibDir());
             return true;
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    private static File nativeLibDir() {
+        try {
+            String path = nativeLibDirOverride;
+            if (path != null && !path.isEmpty()) {
+                return new File(path);
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     public static String diagnose() {
@@ -46,50 +64,76 @@ public final class TessOcrEngine implements AutoCloseable {
             return "ocr root missing: " + root + " (nothing deployed yet)";
         }
         StringBuilder missing = new StringBuilder();
+        StringBuilder present = new StringBuilder();
         for (String name : LANG_FILES) {
-            check(missing, new File(root, "tessdata/" + name));
+            stat(root, "tessdata/" + name, missing, present);
         }
         for (String name : LIB_LOAD_NAMES) {
-            check(missing, new File(root, "lib/arm64-v8a/" + System.mapLibraryName(name)));
+            stat(root, "lib/arm64-v8a/" + System.mapLibraryName(name), missing, present);
         }
         if (missing.length() == 0) {
-            return "all expected OCR files present under " + root;
+            return "all expected OCR files present under " + root + ": " + present;
         }
-        return "missing under " + root + ": " + missing;
+        return "missing under " + root + ": " + missing + "; present: " + present;
     }
 
-    private static void check(StringBuilder missing, File file) {
-        if (!file.isFile()) {
+    private static void stat(File root, String rel, StringBuilder missing, StringBuilder present) {
+        File file = new File(root, rel);
+        if (file.isFile()) {
+            if (present.length() > 0) {
+                present.append(',');
+            }
+            present.append(rel).append('(').append(file.length()).append(')');
+        } else {
             if (missing.length() > 0) {
                 missing.append(',');
             }
-            missing.append(file.getAbsolutePath().substring(DEFAULT_ROOT.length() + 1));
+            missing.append(rel);
         }
     }
 
     /**
-     * Makes the native libs loadable in this process. Prefers
-     * {@code System.loadLibrary} (works when the host sets up the app native
-     * path, e.g. Shizuku UserService), falls back to the absolute copies
-     * under {@code libDir} (shell/app_process flows).
+     * Makes the native libs loadable in this process. For each lib, in
+     * dependency order, tries {@code System.loadLibrary} (works when the host
+     * sets up the app native path), then the app's extracted native libs
+     * (friendliest SELinux label), then the absolute copies under
+     * {@code libDir} (/data/local/tmp flows). The first error aborts with the
+     * file name and size attached.
      */
-    static void loadLibraries(File libDir) {
+    static void loadLibraries(File libDir, File appLibDir) {
         for (String name : LIB_LOAD_NAMES) {
+            String fileName = System.mapLibraryName(name);
             boolean loaded = false;
+            Throwable firstError = null;
             try {
                 System.loadLibrary(name);
                 loaded = true;
-            } catch (Throwable ignored) {
+            } catch (Throwable e) {
+                firstError = e;
+            }
+            if (!loaded && appLibDir != null) {
+                File file = new File(appLibDir, fileName);
+                if (file.isFile()) {
+                    try {
+                        System.load(file.getAbsolutePath());
+                        loaded = true;
+                    } catch (Throwable e) {
+                        firstError = e;
+                    }
+                }
             }
             if (!loaded) {
-                File file = new File(libDir, System.mapLibraryName(name));
+                File file = new File(libDir, fileName);
                 if (!file.isFile()) {
-                    throw new IllegalStateException("Missing native lib: " + file);
+                    throw new IllegalStateException("Missing native lib: " + file
+                            + " (loadLibrary failed: " + message(firstError) + ")");
                 }
                 try {
                     System.load(file.getAbsolutePath());
+                    loaded = true;
                 } catch (Throwable e) {
-                    throw new IllegalStateException("Load native lib failed: " + file, e);
+                    throw new IllegalStateException("Load native lib failed: "
+                            + fileInfo(file), e);
                 }
             }
         }
@@ -99,6 +143,24 @@ public final class TessOcrEngine implements AutoCloseable {
             Class.forName("com.googlecode.tesseract.android.TessBaseAPI");
         } catch (Throwable e) {
             throw new IllegalStateException("Tesseract wrapper unavailable", e);
+        }
+    }
+
+    private static String message(Throwable e) {
+        if (e == null) {
+            return "unknown";
+        }
+        String message = e.getMessage();
+        return message == null || message.isEmpty()
+                ? e.getClass().getSimpleName() : message;
+    }
+
+    private static String fileInfo(File file) {
+        try {
+            return file.getAbsolutePath() + "(exists=" + file.isFile()
+                    + ",size=" + file.length() + ")";
+        } catch (Throwable ignored) {
+            return String.valueOf(file);
         }
     }
 
@@ -116,7 +178,7 @@ public final class TessOcrEngine implements AutoCloseable {
             String code = part.startsWith("~") ? part.substring(1) : part;
             requiredFile(new File(tessdataDir, code + ".traineddata").getAbsolutePath());
         }
-        loadLibraries(libDir);
+        loadLibraries(libDir, nativeLibDir());
         TessBaseAPI next = new TessBaseAPI();
         boolean ok;
         try {
