@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 final class AutomationEngine {
     private static final int MAX_STEPS = 25;
-    private static final int MAX_OBSERVATION_TOOL_CALLS = 4;
-    private static final int MAX_UI_CHARS = (int) (1_000_000 * 0.6);
+    private static final int MAX_OBSERVATION_TOOL_CALLS = 2;
+    private static final int MAX_UI_CHARS = 200_000;
     private static final int LOGCAT_LAYOUT_CHUNK = 3500;
     private static final String TOOL_SYSTEM_PROMPT = """
             You operate Android only by calling exactly one provided tool. Do not describe the action.
@@ -152,7 +152,7 @@ final class AutomationEngine {
             logs.task(task.taskId, "virtual display local IME " + (task.display.localImeEnabled() ? "enabled" : "unavailable"));
             appCatalog.launchPackage(task.taskId, app.packageName, task.display.displayId);
             logs.task(task.taskId, "launched " + app.packageName);
-            sleep(task, 1800);
+            sleep(task, 1200);
 
             for (int step = 1; step <= MAX_STEPS && !task.stop.get(); step++) {
                 String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
@@ -223,7 +223,7 @@ final class AutomationEngine {
                     sleep(task, Math.max(300, action.ms));
                 }
                 rememberAction(task, action, clickResult, focusResult);
-                sleep(task, 900);
+                waitForUiSettle(task, bridge, dump, 700);
             }
             task.state = "idle";
             if (task.stop.get()) {
@@ -555,7 +555,7 @@ final class AutomationEngine {
                 return JsonRpc.GSON.toJson(object);
             }
             logs.logcat(task.taskId, "ocr_dump_begin displayId=" + task.display.displayId);
-            bitmap = ScreenCapture.latestBitmap(task.display, 8, 120);
+            bitmap = ScreenCapture.latestBitmap(task.display, 5, 80);
             if (bitmap == null) {
                 object.addProperty("ocr_available", false);
                 object.addProperty("error", "no latest frame available");
@@ -955,6 +955,36 @@ final class AutomationEngine {
     private void sleep(TaskState task, long ms) {
         if (!task.stop.get()) {
             SystemClock.sleep(ms);
+        }
+    }
+
+    /**
+     * Waits only until the UI tree differs from the pre-action dump (or
+     * {@code maxMs} elapses), polling every 150ms. Faster than a fixed sleep
+     * when the UI settles quickly, and never slower than the old fixed pause.
+     * Keeps the next step's coordinates fresh for accurate taps.
+     */
+    private void waitForUiSettle(TaskState task, UiBridge bridge, String previousDump, long maxMs) {
+        if (task.stop.get() || task.display == null) {
+            return;
+        }
+        int previousHash = previousDump == null ? 0 : previousDump.hashCode();
+        long deadline = SystemClock.uptimeMillis() + Math.max(150, maxMs);
+        while (!task.stop.get()) {
+            SystemClock.sleep(150);
+            String current;
+            try {
+                current = bridge.dump(task.display.displayId, task.display.width,
+                        task.display.height, UiBridge.MODE_SIMPLE);
+            } catch (Throwable ignored) {
+                return;
+            }
+            if (current == null || current.hashCode() != previousHash) {
+                return;
+            }
+            if (SystemClock.uptimeMillis() >= deadline) {
+                return;
+            }
         }
     }
 

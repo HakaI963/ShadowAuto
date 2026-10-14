@@ -36,6 +36,17 @@ public final class TessOcrResult {
         points.add(new Point(x, y));
     }
 
+    void scaleBounds(float factor) {
+        if (factor == 1f || factor <= 0 || bounds.isEmpty()) {
+            return;
+        }
+        setBounds(new Rect(
+                Math.round(bounds.left * factor),
+                Math.round(bounds.top * factor),
+                Math.round(bounds.right * factor),
+                Math.round(bounds.bottom * factor)));
+    }
+
     public List<Point> getPoints() {
         return Collections.unmodifiableList(points);
     }

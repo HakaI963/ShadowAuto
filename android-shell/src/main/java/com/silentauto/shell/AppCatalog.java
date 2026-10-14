@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.os.SystemClock;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -13,6 +14,11 @@ import java.util.List;
 import java.util.Locale;
 
 final class AppCatalog {
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
+    private static final Object CACHE_LOCK = new Object();
+    private static List<AppInfo> cachedApps;
+    private static long cachedAt;
+
     private final LogHub logs;
 
     AppCatalog(LogHub logs) {
@@ -20,9 +26,22 @@ final class AppCatalog {
     }
 
     List<AppInfo> installedApps() {
+        synchronized (CACHE_LOCK) {
+            long now = SystemClock.uptimeMillis();
+            if (cachedApps != null && now - cachedAt < CACHE_TTL_MS) {
+                return new ArrayList<>(cachedApps);
+            }
+            List<AppInfo> fresh = scan();
+            cachedApps = fresh;
+            cachedAt = now;
+            return new ArrayList<>(fresh);
+        }
+    }
+
+    private List<AppInfo> scan() {
         PackageManager pm = ShellContext.get().getPackageManager();
         List<AppInfo> result = new ArrayList<>();
-        for (ApplicationInfo app : pm.getInstalledApplications(PackageManager.GET_META_DATA)) {
+        for (ApplicationInfo app : pm.getInstalledApplications(0)) {
             if (pm.getLaunchIntentForPackage(app.packageName) == null) {
                 continue;
             }
@@ -69,8 +88,11 @@ final class AppCatalog {
         if (component == null) {
             throw new IllegalStateException("no launch component for " + packageName);
         }
-        new ProcessBuilder("sh", "-c", "am force-stop " + shellQuote(packageName)).start().waitFor();
-        String command = "am start --display " + displayId
+        // Single shell invocation instead of two: halves process-spawn latency.
+        // `;` (not &&) preserves the old behavior: start runs even if the
+        // preceding force-stop reports an error.
+        String command = "am force-stop " + shellQuote(packageName)
+                + " ; am start --display " + displayId
                 + " -f 0x10008000 -n " + shellQuote(component.flattenToShortString());
         Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
         StringBuilder output = new StringBuilder();

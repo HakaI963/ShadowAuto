@@ -24,6 +24,9 @@ public final class TessOcrEngine implements AutoCloseable {
     public static final String DEFAULT_LIB_DIR = DEFAULT_ROOT + "/lib/arm64-v8a";
     public static final String DEFAULT_LANG = "chi_sim+eng";
 
+    /** Screenshots are downscaled to this long side before recognition. */
+    public static final int MAX_SIDE = 800;
+
     /** Dependency order: C++ runtime, image codecs, leptonica, tesseract. */
     static final String[] LIB_LOAD_NAMES = {"c++_shared", "jpeg", "pngx", "leptonica", "tesseract"};
     static final String[] LANG_FILES = {"chi_sim.traineddata", "eng.traineddata"};
@@ -238,8 +241,34 @@ public final class TessOcrEngine implements AutoCloseable {
             recycleInput = true;
         }
         try {
-            api.setPageSegMode(pageSegMode);
-            api.setImage(input);
+            // Downscale large screenshots: Tesseract time scales with pixels,
+            // and UI text stays readable at 800px. Bounds are scaled back to
+            // display pixels below so taps stay accurate.
+            Bitmap scaled = input;
+            boolean recycleScaled = false;
+            float down = 1f;
+            int maxSide = Math.max(input.getWidth(), input.getHeight());
+            if (maxSide > MAX_SIDE) {
+                down = (float) MAX_SIDE / maxSide;
+                int w = Math.max(1, Math.round(input.getWidth() * down));
+                int h = Math.max(1, Math.round(input.getHeight() * down));
+                try {
+                    Bitmap attempt = Bitmap.createScaledBitmap(input, w, h, true);
+                    if (attempt != null) {
+                        scaled = attempt;
+                        recycleScaled = scaled != input;
+                    } else {
+                        down = 1f;
+                    }
+                } catch (Throwable ignored) {
+                    scaled = input;
+                    down = 1f;
+                }
+            }
+            float up = down <= 0 ? 1f : 1f / down;
+            try {
+                api.setPageSegMode(pageSegMode);
+                api.setImage(scaled);
             // Blocking call that runs layout analysis + recognition once;
             // the iterator below only reads the results.
             api.getUTF8Text();
@@ -277,6 +306,7 @@ public final class TessOcrEngine implements AutoCloseable {
                     result.setText(word);
                     if (box != null) {
                         result.setBounds(box);
+                        result.scaleBounds(up);
                     }
                     result.setConfidence(Math.max(0, Math.min(1, conf)));
                     out.add(result);
@@ -294,6 +324,11 @@ public final class TessOcrEngine implements AutoCloseable {
                 }
             }
             return out;
+        } finally {
+            if (recycleScaled) {
+                scaled.recycle();
+            }
+        }
         } finally {
             if (recycleInput) {
                 input.recycle();
