@@ -36,6 +36,14 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    // Extract native .so files to nativeLibraryDir at install time.
+    // (AGP rejects android:extractNativeLibs in the manifest; use this.)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
 }
 
 dependencies {

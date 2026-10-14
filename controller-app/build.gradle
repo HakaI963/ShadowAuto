@@ -36,6 +36,15 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    // Extract native .so files to nativeLibraryDir at install time, so the
+    // OCR runtime can copy them to /data/local/tmp/shadowauto/ocr.
+    // (AGP rejects android:extractNativeLibs in the manifest; use this.)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     sourceSets {
         main {
             java.srcDirs += '../android-shell/src/main/java'
