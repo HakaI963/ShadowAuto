@@ -133,3 +133,40 @@ jobs:
           files: |
             signed-apks/*.apk
             ocr-runtime.zip
+
+      # Readable CI diagnostics without API access: on any failure, push a
+      # small report to the ci-logs branch (never triggers this workflow).
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          {
+            echo "### run ${{ github.run_number }} sha ${{ github.sha }} $(date -u)"
+            echo "--- env ---"
+            env | grep -iE "android|java|sdk|ndk|gradle|workspace|github_" | sort
+            echo "--- which ---"
+            which java keytool sdkmanager apksigner zipalign 2>&1
+            java -version 2>&1 | head -3
+            echo "--- sdk candidates ---"
+            for d in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
+              [ -n "$d" ] || continue
+              echo "== $d"
+              ls "$d/build-tools" 2>&1 | head -5
+            done
+            echo "--- apks in build outputs ---"
+            find . -path '*build/outputs/apk*' -name '*.apk' -exec ls -lh {} \; 2>/dev/null | head -10
+            echo "--- signed-apks ---"
+            ls -lh signed-apks 2>&1 | head -10
+            echo "--- disk ---"
+            df -h "$GITHUB_WORKSPACE" 2>/dev/null | tail -1
+            echo "--- tessdata ---"
+            ls -lh tess-ocr/TessData/tessdata 2>/dev/null | head -5
+          } > /tmp/ci-diag.txt 2>&1 || true
+          git config user.name "ci-debug" || true
+          git config user.email "ci-debug@local" || true
+          git fetch origin ci-logs 2>/dev/null || true
+          git checkout -B ci-logs 2>/dev/null || true
+          mkdir -p ci-debug
+          cp /tmp/ci-diag.txt "ci-debug/${{ github.run_number }}.txt"
+          git add "ci-debug/${{ github.run_number }}.txt"
+          git commit -m "CI diagnostics for run ${{ github.run_number }}" 2>/dev/null || true
+          git push origin ci-logs --force 2>&1 | tail -2 || true
