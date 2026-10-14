@@ -223,7 +223,7 @@ final class AutomationEngine {
                     sleep(task, Math.max(300, action.ms));
                 }
                 rememberAction(task, action, clickResult, focusResult);
-                waitForUiSettle(task, bridge, dump, 700);
+                sleep(task, 350);
             }
             task.state = "idle";
             if (task.stop.get()) {
@@ -955,36 +955,6 @@ final class AutomationEngine {
     private void sleep(TaskState task, long ms) {
         if (!task.stop.get()) {
             SystemClock.sleep(ms);
-        }
-    }
-
-    /**
-     * Waits only until the UI tree differs from the pre-action dump (or
-     * {@code maxMs} elapses), polling every 150ms. Faster than a fixed sleep
-     * when the UI settles quickly, and never slower than the old fixed pause.
-     * Keeps the next step's coordinates fresh for accurate taps.
-     */
-    private void waitForUiSettle(TaskState task, UiBridge bridge, String previousDump, long maxMs) {
-        if (task.stop.get() || task.display == null) {
-            return;
-        }
-        int previousHash = previousDump == null ? 0 : previousDump.hashCode();
-        long deadline = SystemClock.uptimeMillis() + Math.max(150, maxMs);
-        while (!task.stop.get()) {
-            SystemClock.sleep(150);
-            String current;
-            try {
-                current = bridge.dump(task.display.displayId, task.display.width,
-                        task.display.height, UiBridge.MODE_SIMPLE);
-            } catch (Throwable ignored) {
-                return;
-            }
-            if (current == null || current.hashCode() != previousHash) {
-                return;
-            }
-            if (SystemClock.uptimeMillis() >= deadline) {
-                return;
-            }
         }
     }
 

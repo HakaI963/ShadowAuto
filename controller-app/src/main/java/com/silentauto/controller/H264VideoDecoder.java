@@ -12,11 +12,13 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 final class H264VideoDecoder implements TextureView.SurfaceTextureListener {
     private final TextureView texture;
     private final Handler main;
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> new Thread(r, "h264-video-decoder"));
+    private final AtomicInteger pending = new AtomicInteger();
 
     private Surface surface;
     private MediaCodec decoder;
@@ -51,33 +53,44 @@ final class H264VideoDecoder implements TextureView.SurfaceTextureListener {
     }
 
     void queueSample(String base64, long ptsUs, int flags) {
+        boolean keyFrame = (flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+        if (!keyFrame && pending.get() > 8) {
+            // Decoder is behind: drop stale P-frames so the preview stays
+            // live instead of lagging further behind. Artifacts self-heal at
+            // the next key frame (encoder sends one every second).
+            return;
+        }
         run(() -> {
-            if (base64 == null || base64.isEmpty()) {
-                return;
-            }
-            ensureDecoder();
-            if (decoder == null) {
-                return;
-            }
-            boolean keyFrame = (flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
-            if (waitingForKeyFrame && !keyFrame) {
-                return;
-            }
-            byte[] data = Base64.decode(base64, Base64.DEFAULT);
-            int index = decoder.dequeueInputBuffer(0);
-            if (index < 0) {
+            pending.incrementAndGet();
+            try {
+                if (base64 == null || base64.isEmpty()) {
+                    return;
+                }
+                ensureDecoder();
+                if (decoder == null) {
+                    return;
+                }
+                if (waitingForKeyFrame && !keyFrame) {
+                    return;
+                }
+                byte[] data = Base64.decode(base64, Base64.DEFAULT);
+                int index = decoder.dequeueInputBuffer(0);
+                if (index < 0) {
+                    drainOutput();
+                    return;
+                }
+                ByteBuffer buffer = decoder.getInputBuffer(index);
+                if (buffer == null) {
+                    return;
+                }
+                buffer.clear();
+                buffer.put(data);
+                decoder.queueInputBuffer(index, 0, data.length, ptsUs, 0);
+                waitingForKeyFrame = false;
                 drainOutput();
-                return;
+            } finally {
+                pending.decrementAndGet();
             }
-            ByteBuffer buffer = decoder.getInputBuffer(index);
-            if (buffer == null) {
-                return;
-            }
-            buffer.clear();
-            buffer.put(data);
-            decoder.queueInputBuffer(index, 0, data.length, ptsUs, 0);
-            waitingForKeyFrame = false;
-            drainOutput();
         });
     }
 

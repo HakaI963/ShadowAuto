@@ -86,6 +86,7 @@ final class AiClient {
                 .build();
 
         StringBuilder full = new StringBuilder();
+        StringBuilder staged = new StringBuilder();
         Map<Integer, ToolCallBuilder> tools = new LinkedHashMap<>();
         call = http.newCall(request);
         try (Response response = call.execute()) {
@@ -108,13 +109,22 @@ final class AiClient {
                     String token = delta(data, tools);
                     if (!token.isEmpty()) {
                         full.append(token);
-                        logs.ai(taskId, token);
+                        // Batch deltas: one RPC event per token floods the
+                        // socket, logcat, and the controller log view.
+                        staged.append(token);
+                        if (staged.length() >= 64 || token.indexOf('\n') >= 0) {
+                            logs.ai(taskId, staged.toString());
+                            staged.setLength(0);
+                        }
                     }
                 }
             }
         }
         finally {
             call = null;
+        }
+        if (staged.length() > 0) {
+            logs.ai(taskId, staged.toString());
         }
         logs.ai(taskId, "\n");
         ToolResult result = new ToolResult();

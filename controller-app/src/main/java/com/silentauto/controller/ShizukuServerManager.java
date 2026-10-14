@@ -34,7 +34,7 @@ public final class ShizukuServerManager {
     public static final String MANAGER_DOWNLOAD = "https://shizuku.rikka.app/download/";
     private static final String SERVICE_CLASS = "com.silentauto.shell.ShellUserService";
     private static final String SERVICE_TAG = "shadowauto-shell";
-    private static final int SERVICE_VERSION = 9;
+    private static final int SERVICE_VERSION = 10;
     private static final AtomicInteger IDS = new AtomicInteger(1000);
 
     public interface Callback {

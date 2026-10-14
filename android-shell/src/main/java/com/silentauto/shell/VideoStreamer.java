@@ -12,9 +12,9 @@ import java.nio.ByteBuffer;
 
 final class VideoStreamer implements Runnable {
     private static final String MIME = MediaFormat.MIMETYPE_VIDEO_AVC;
-    private static final int FRAME_RATE = 8;
+    private static final int FRAME_RATE = 30;
     private static final int I_FRAME_INTERVAL_SECONDS = 1;
-    private static final long REPEAT_PREVIOUS_FRAME_AFTER_US = 150_000L;
+    private static final long REPEAT_PREVIOUS_FRAME_AFTER_US = 500_000L;
     private static final long DRAIN_TIMEOUT_US = 100_000L;
 
     private final LogHub logs;
