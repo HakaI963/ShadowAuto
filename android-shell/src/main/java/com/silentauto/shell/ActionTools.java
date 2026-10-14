@@ -15,7 +15,7 @@ final class ActionTools {
         tools.add(tool("get_ui_layout", "Return the latest UiAutomation JSON dump for the current virtual display. mode=simple returns compact actionable UI; mode=full returns the complete tree.",
                 props(prop("mode", "string", "simple or full"), prop("reason", "string", "why the latest layout is needed")),
                 required()));
-        tools.add(tool("get_screen_ocr", "Return offline OCR text and bounds from the latest virtual display screenshot. Use it when UI layout is sparse, empty, wrong, or visible text is drawn without accessibility nodes.",
+        tools.add(tool("get_screen_ocr", "Return offline OCR text and bounds from the latest virtual display screenshot. Use it when UI layout is sparse, empty, wrong, or visible text is drawn without accessibility nodes. If the result has ocr_available=false, the on-device OCR runtime is missing; do NOT retry OCR in a loop, use get_ui_layout instead and report that `adb push ocr/. /data/local/tmp/shadowauto/ocr/` from ocr-runtime.zip is required.",
                 props(prop("reason", "string", "why screen OCR is needed")),
                 required()));
         tools.add(tool("tap_target", "Click a UI target by targetIndex from the UI dump targets array. This uses Accessibility ACTION_CLICK first and falls back to the target center.",

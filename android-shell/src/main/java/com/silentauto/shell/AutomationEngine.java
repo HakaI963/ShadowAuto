@@ -484,7 +484,7 @@ final class AutomationEngine {
                 6. Use press_key with search or enter to submit focused search/input fields when appropriate.
                 7. Use scroll_ui when more content is needed. direction means content direction: down reveals lower content, up reveals upper content.
                 8. Use get_ui_layout mode=simple after a UI-changing action if the next target is uncertain; use mode=full only when simple lacks needed nodes.
-                9. Use get_screen_ocr when UI layout is sparse, empty, wrong, or the visible page has text without accessibility nodes. OCR bounds are display-local.
+                9. Use get_screen_ocr when UI layout is sparse, empty, wrong, or the visible page has text without accessibility nodes. OCR bounds are display-local. If OCR returns ocr_available=false, the device OCR runtime is missing: do NOT call get_screen_ocr again, use get_ui_layout instead.
                 10. Use finish only when the visible UI proves the user's goal is complete.
                 11. Search text candidate is the text to enter after opening a search field. If it is non-empty and the previous action clicked or focused a search/input field, call input_text with exactly that text; do not wait.
                 12. Do not call wait repeatedly on sparse or empty UI. After two waits, call get_ui_layout, get_screen_ocr, input_text, press_back, scroll_ui, or another concrete tool.
@@ -549,17 +549,22 @@ final class AutomationEngine {
         Bitmap bitmap = null;
         try {
             if (task.display == null) {
+                object.addProperty("ocr_available", false);
                 object.addProperty("error", "virtual display is not available");
+                object.addProperty("fallback", "use get_ui_layout instead");
                 return JsonRpc.GSON.toJson(object);
             }
             logs.logcat(task.taskId, "ocr_dump_begin displayId=" + task.display.displayId);
             bitmap = ScreenCapture.latestBitmap(task.display, 8, 120);
             if (bitmap == null) {
+                object.addProperty("ocr_available", false);
                 object.addProperty("error", "no latest frame available");
+                object.addProperty("fallback", "use get_ui_layout instead and retry get_screen_ocr after one wait");
                 logs.logcat(task.taskId, "ocr_dump_error no latest frame available");
                 return JsonRpc.GSON.toJson(object);
             }
             List<PaddleOcrResult> results = getOcrEngine().recognize(bitmap);
+            object.addProperty("ocr_available", true);
             StringBuilder combined = new StringBuilder();
             for (int i = 0; i < results.size(); i++) {
                 PaddleOcrResult result = results.get(i);
@@ -575,7 +580,12 @@ final class AutomationEngine {
             logOcrResults(task.taskId, results);
             logs.logcat(task.taskId, "ocr_dump_end displayId=" + task.display.displayId);
         } catch (Throwable e) {
+            object.addProperty("ocr_available", false);
             object.addProperty("error", e.getMessage());
+            object.addProperty("ocr_root", PaddleOcrEngine.DEFAULT_ROOT);
+            object.addProperty("ocr_diagnosis", ocrDiagnosis());
+            object.addProperty("setup", "download ocr-runtime.zip from the GitHub release, unzip, then run: adb push ocr/. /data/local/tmp/shadowauto/ocr/ (must contain lib/arm64-v8a/*.so, models/ch_PP-OCRv2/*.nb, labels/ppocr_keys_v1.txt), then retry get_screen_ocr once");
+            object.addProperty("fallback", "OCR runtime is missing on the device; do not retry OCR in a loop, use get_ui_layout (mode=full) and continue with UI targets/coordinates");
             logs.error(task.taskId, "ocr dump failed", e);
         } finally {
             if (bitmap != null) {
@@ -583,6 +593,39 @@ final class AutomationEngine {
             }
         }
         return JsonRpc.GSON.toJson(object);
+    }
+
+    private String ocrDiagnosis() {
+        try {
+            java.io.File root = new java.io.File(PaddleOcrEngine.DEFAULT_ROOT);
+            if (!root.isDirectory()) {
+                return "ocr root missing: " + root + " (nothing pushed yet)";
+            }
+            String[] expected = {
+                    "lib/arm64-v8a/libNative.so",
+                    "lib/arm64-v8a/libc++_shared.so",
+                    "lib/arm64-v8a/libomp.so",
+                    "models/ch_PP-OCRv2/det_db.nb",
+                    "models/ch_PP-OCRv2/rec_crnn.nb",
+                    "models/ch_PP-OCRv2/cls.nb",
+                    "labels/ppocr_keys_v1.txt",
+            };
+            StringBuilder missing = new StringBuilder();
+            for (String rel : expected) {
+                if (!new java.io.File(root, rel).isFile()) {
+                    if (missing.length() > 0) {
+                        missing.append(',');
+                    }
+                    missing.append(rel);
+                }
+            }
+            if (missing.length() == 0) {
+                return "all expected OCR files present under " + root;
+            }
+            return "missing under " + root + ": " + missing;
+        } catch (Throwable e) {
+            return "diagnosis failed: " + e.getMessage();
+        }
     }
 
     private PaddleOcrEngine getOcrEngine() throws Exception {

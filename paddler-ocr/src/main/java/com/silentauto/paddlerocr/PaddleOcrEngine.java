@@ -115,7 +115,9 @@ public final class PaddleOcrEngine implements AutoCloseable {
     private File requiredDirectory(String path) {
         File file = new File(path);
         if (!file.isDirectory()) {
-            throw new IllegalStateException("Missing Paddle OCR directory: " + file);
+            throw new IllegalStateException("Missing Paddle OCR directory: " + file
+                    + " (push ocr-runtime.zip contents to " + DEFAULT_ROOT
+                    + ": adb push ocr/. " + DEFAULT_ROOT + "/)");
         }
         return file;
     }
@@ -123,7 +125,9 @@ public final class PaddleOcrEngine implements AutoCloseable {
     private File requiredFile(String path) {
         File file = new File(path);
         if (!file.isFile()) {
-            throw new IllegalStateException("Missing Paddle OCR file: " + file);
+            throw new IllegalStateException("Missing Paddle OCR file: " + file
+                    + " (push ocr-runtime.zip contents to " + DEFAULT_ROOT
+                    + ": adb push ocr/. " + DEFAULT_ROOT + "/)");
         }
         return file;
     }
