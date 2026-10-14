@@ -1,0 +1,182 @@
+### run 32 sha 9b08403cabbe7c4c02737857a294c53109a4579b Wed Oct 14 15:23:24 UTC 2026
+--- env ---
+ANDROID_HOME=/usr/local/lib/android/sdk
+ANDROID_NDK=/usr/local/lib/android/sdk/ndk/27.3.13750724
+ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/27.3.13750724
+ANDROID_NDK_LATEST_HOME=/usr/local/lib/android/sdk/ndk/30.0.16248370
+ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/27.3.13750724
+ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+DEVELOCITY_AUTO_INJECTION_CUSTOM_VALUE=gradle-actions
+DEVELOCITY_INJECTION_INIT_SCRIPT_NAME=gradle-actions.inject-develocity.init.gradle
+GITHUB_ACTION=__run_6
+GITHUB_ACTIONS=true
+GITHUB_ACTION_REF=
+GITHUB_ACTION_REPOSITORY=
+GITHUB_ACTOR=HakaI963
+GITHUB_ACTOR_ID=253204271
+GITHUB_API_URL=https://api.github.com
+GITHUB_ARTIFACTS=/home/runner/work/_temp/_runner_file_commands/artifacts_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_ARTIFACTS_LIST=/home/runner/work/_temp/_runner_file_commands/artifacts_list_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_BASE_REF=
+GITHUB_DEPENDENCY_GRAPH_ENABLED=false
+GITHUB_ENV=/home/runner/work/_temp/_runner_file_commands/set_env_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_EVENT_NAME=push
+GITHUB_EVENT_PATH=/home/runner/work/_temp/_github_workflow/event.json
+GITHUB_GRAPHQL_URL=https://api.github.com/graphql
+GITHUB_HEAD_REF=
+GITHUB_JOB=build
+GITHUB_OUTPUT=/home/runner/work/_temp/_runner_file_commands/set_output_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_PATH=/home/runner/work/_temp/_runner_file_commands/add_path_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_REF=refs/heads/main
+GITHUB_REF_NAME=main
+GITHUB_REF_PROTECTED=false
+GITHUB_REF_TYPE=branch
+GITHUB_REPOSITORY=HakaI963/ShadowAuto
+GITHUB_REPOSITORY_ID=1417736739
+GITHUB_REPOSITORY_OWNER=HakaI963
+GITHUB_REPOSITORY_OWNER_ID=253204271
+GITHUB_RETENTION_DAYS=90
+GITHUB_RUN_ATTEMPT=1
+GITHUB_RUN_ID=38588316831
+GITHUB_RUN_NUMBER=32
+GITHUB_SERVER_URL=https://github.com
+GITHUB_SHA=9b08403cabbe7c4c02737857a294c53109a4579b
+GITHUB_STATE=/home/runner/work/_temp/_runner_file_commands/save_state_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_STEP_SUMMARY=/home/runner/work/_temp/_runner_file_commands/step_summary_9426674b-8114-49bb-9a61-588e80461c8e
+GITHUB_TRIGGERING_ACTOR=HakaI963
+GITHUB_WORKFLOW=Build APK (OCR)
+GITHUB_WORKFLOW_REF=HakaI963/ShadowAuto/.github/workflows/build-apk.yml@refs/heads/main
+GITHUB_WORKFLOW_SHA=9b08403cabbe7c4c02737857a294c53109a4579b
+GITHUB_WORKSPACE=/home/runner/work/ShadowAuto/ShadowAuto
+GRADLE_BUILD_ACTION_CACHE_RESTORED=true
+GRADLE_BUILD_ACTION_SETUP_COMPLETED=true
+GRADLE_HOME=/usr/share/gradle-9.8.1
+JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+JAVA_HOME_11_X64=/usr/lib/jvm/temurin-11-jdk-amd64
+JAVA_HOME_17_X64=/usr/lib/jvm/temurin-17-jdk-amd64
+JAVA_HOME_21_X64=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64
+JAVA_HOME_25_X64=/usr/lib/jvm/temurin-25-jdk-amd64
+JAVA_HOME_8_X64=/usr/lib/jvm/temurin-8-jdk-amd64
+PATH=/usr/local/lib/android/sdk/platform-tools:/usr/local/lib/android/sdk/cmdline-tools/16.0/bin:/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64/bin:/snap/bin:/home/runner/.local/bin:/opt/pipx_bin:/home/runner/.cargo/bin:/home/runner/.config/composer/vendor/bin:/usr/local/.ghcup/bin:/home/runner/.dotnet/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+RUNNER_TRACKING_ID=github_fe514602-2d53-4647-a45c-46838b56f7aa
+RUNNER_WORKSPACE=/home/runner/work/ShadowAuto
+SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
+--- which ---
+/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64/bin/java
+/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.12-1/x64/bin/keytool
+/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager
+openjdk version "21.0.12.1" 2026-08-18 LTS
+OpenJDK Runtime Environment Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (build 21.0.12.1+1-LTS, mixed mode, sharing)
+--- locate replay (each cmd with rc) ---
+ls SDK_ROOT rc=0:
+34.0.0
+35.0.0
+35.0.1
+36.0.0
+36.1.0
+37.0.0
+rc=0
+keytool probe:
+Key and Certificate Management Tool
+
+rc=0
+genkeypair dry-run to /tmp:
+keytool error: java.lang.Exception: Key password must be at least 6 characters
+rc=0
+ls: cannot access '/tmp/probe.keystore': No such file or directory
+mkdir probe:
+mkdir rc=0
+--- sdk candidates ---
+== /usr/local/lib/android/sdk
+34.0.0
+35.0.0
+35.0.1
+36.0.0
+36.1.0
+== /usr/local/lib/android/sdk
+34.0.0
+35.0.0
+35.0.1
+36.0.0
+36.1.0
+== /home/runner/Android/Sdk
+ls: cannot access '/home/runner/Android/Sdk/build-tools': No such file or directory
+== /usr/local/lib/android/sdk
+34.0.0
+35.0.0
+35.0.1
+36.0.0
+36.1.0
+== /opt/android-sdk
+ls: cannot access '/opt/android-sdk/build-tools': No such file or directory
+--- apks in build outputs ---
+--- signed-apks ---
+total 0
+--- disk ---
+/dev/root       145G   62G   83G  43% /
+--- tessdata ---
+total 65M
+-rw-r--r-- 1 runner runner 43M Oct 14 06:46 chi_sim.traineddata
+-rw-r--r-- 1 runner runner 23M Oct 14 06:46 eng.traineddata
+--- retry full assemble to capture error ---
+> Task :android-shell:stripReleaseDebugSymbols UP-TO-DATE
+> Task :android-shell:extractReleaseNativeSymbolTables UP-TO-DATE
+> Task :android-shell:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :tess-ocr:generateReleaseResources UP-TO-DATE
+> Task :tess-ocr:packageReleaseResources UP-TO-DATE
+> Task :tess-ocr:processReleaseNavigationResources UP-TO-DATE
+> Task :tess-ocr:parseReleaseLocalResources UP-TO-DATE
+> Task :tess-ocr:generateReleaseRFile UP-TO-DATE
+> Task :tess-ocr:compileReleaseKotlin NO-SOURCE
+> Task :tess-ocr:javaPreCompileRelease UP-TO-DATE
+> Task :tess-ocr:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :tess-ocr:bundleLibRuntimeToDirRelease UP-TO-DATE
+> Task :android-shell:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :android-stubs:compileJava UP-TO-DATE
+> Task :android-stubs:processResources NO-SOURCE
+> Task :android-stubs:classes UP-TO-DATE
+> Task :android-stubs:jar UP-TO-DATE
+> Task :android-shell:generateReleaseResources UP-TO-DATE
+> Task :android-shell:packageReleaseResources UP-TO-DATE
+> Task :android-shell:processReleaseNavigationResources UP-TO-DATE
+> Task :android-shell:parseReleaseLocalResources UP-TO-DATE
+> Task :android-shell:generateReleaseRFile UP-TO-DATE
+> Task :tess-ocr:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :android-shell:compileReleaseKotlin NO-SOURCE
+> Task :android-shell:javaPreCompileRelease UP-TO-DATE
+
+> Task :android-shell:compileReleaseJavaWithJavac FAILED
+/home/runner/work/ShadowAuto/ShadowAuto/android-shell/src/main/java/com/silentauto/shell/VideoStreamer.java:63: error: incompatible types: Range<Double> cannot be converted to Range<Integer>
+                    Range<Integer> fpsRange = caps.getSupportedFrameRatesFor(width, height);
+                                                                            ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+[Incubating] Problems report is available at: file:///home/runner/work/ShadowAuto/ShadowAuto/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':android-shell:compileReleaseJavaWithJavac' (registered by plugin 'com.android.internal.application').
+> Compilation failed; see the compiler output below.
+  /home/runner/work/ShadowAuto/ShadowAuto/android-shell/src/main/java/com/silentauto/shell/VideoStreamer.java:63: error: incompatible types: Range<Double> cannot be converted to Range<Integer>
+                      Range<Integer> fpsRange = caps.getSupportedFrameRatesFor(width, height);
+                                                                              ^
+  Note: Some input files use or override a deprecated API.
+  Note: Recompile with -Xlint:deprecation for details.
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 10s
+28 actionable tasks: 2 executed, 26 up-to-date
