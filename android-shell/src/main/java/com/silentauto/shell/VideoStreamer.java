@@ -1,21 +1,22 @@
 package com.silentauto.shell;
 
+import android.content.Context;
+import android.hardware.display.DisplayManager;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
+import android.util.Range;
+import android.view.Display;
 import android.view.Surface;
 
 import java.nio.ByteBuffer;
 
 final class VideoStreamer implements Runnable {
     private static final String MIME = MediaFormat.MIMETYPE_VIDEO_AVC;
-    // No app-side frame cap: the encoder runs at the display's native rate.
-    // Bitrate is sized for 60fps so motion stays sharp; static screens cost
-    // almost nothing since no filler frames are requested.
-    private static final int NOMINAL_FPS = 60;
     private static final int I_FRAME_INTERVAL_SECONDS = 1;
     private static final long DRAIN_TIMEOUT_US = 100_000L;
 
@@ -32,7 +33,9 @@ final class VideoStreamer implements Runnable {
     VideoStreamer(LogHub logs, String taskId, int width, int height) throws Exception {
         this.logs = logs;
         this.taskId = taskId == null ? "" : taskId;
-        Prepared prepared = prepareBest(width, height);
+        int targetFps = deviceRefreshRate();
+        MediaCodecInfo.VideoCapabilities caps = encoderCapabilities();
+        Prepared prepared = prepareBest(width, height, targetFps, caps);
         this.width = prepared.width;
         this.height = prepared.height;
         encoder = prepared.encoder;
@@ -43,12 +46,33 @@ final class VideoStreamer implements Runnable {
         }
     }
 
-    private Prepared prepareBest(int preferredWidth, int preferredHeight) throws Exception {
+    private Prepared prepareBest(int preferredWidth, int preferredHeight, int targetFps,
+                                   MediaCodecInfo.VideoCapabilities caps) throws Exception {
         Exception last = null;
         int[][] candidates = candidates(preferredWidth, preferredHeight);
         for (int[] candidate : candidates) {
+            int width = candidate[0];
+            int height = candidate[1];
+            int fps = targetFps;
+            int bitrate = bitRateFor(width, height, targetFps);
+            if (caps != null) {
+                try {
+                    if (!caps.isSizeSupported(width, height)) {
+                        continue;
+                    }
+                    Range<Integer> fpsRange = caps.getSupportedFrameRatesFor(width, height);
+                    fps = clamp(fps, fpsRange.getLower(), fpsRange.getUpper());
+                    Range<Integer> bitrateRange = caps.getBitrateRange();
+                    bitrate = clamp(bitRateFor(width, height, fps),
+                            bitrateRange.getLower(), Math.min(bitrateRange.getUpper(), 15_000_000));
+                } catch (Throwable ignored) {
+                }
+            }
             try {
-                return prepareOne(candidate[0], candidate[1]);
+                Prepared prepared = prepareOne(width, height, fps, bitrate);
+                logs.info(this.taskId, "video encoder " + width + "x" + height
+                        + "@" + fps + "fps " + (bitrate / 1000) + "kbps");
+                return prepared;
             } catch (Exception e) {
                 last = e;
             }
@@ -56,12 +80,57 @@ final class VideoStreamer implements Runnable {
         throw last == null ? new IllegalStateException("No video encoder size available") : last;
     }
 
-    private Prepared prepareOne(int width, int height) throws Exception {
+    /**
+     * Device-native refresh rate: the highest mode the default display
+     * supports, clamped to a sane encoder range. No hardcoded fps cap.
+     */
+    private int deviceRefreshRate() {
+        try {
+            DisplayManager manager = (DisplayManager) ShellContext.get().getSystemService(Context.DISPLAY_SERVICE);
+            Display display = manager == null ? null : manager.getDisplay(Display.DEFAULT_DISPLAY);
+            if (display == null) {
+                return 60;
+            }
+            float best = display.getRefreshRate();
+            try {
+                for (Display.Mode mode : display.getSupportedModes()) {
+                    if (mode != null) {
+                        best = Math.max(best, mode.getRefreshRate());
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            return clamp(Math.round(best), 24, 120);
+        } catch (Throwable ignored) {
+            return 60;
+        }
+    }
+
+    private MediaCodecInfo.VideoCapabilities encoderCapabilities() {
+        try {
+            MediaCodecList list = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+            for (MediaCodecInfo info : list.getCodecInfos()) {
+                if (!info.isEncoder()) {
+                    continue;
+                }
+                for (String type : info.getSupportedTypes()) {
+                    if (MIME.equalsIgnoreCase(type)) {
+                        return info.getCapabilitiesForType(type).getVideoCapabilities();
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private Prepared prepareOne(int width, int height, int fps, int bitrate) throws Exception {
         MediaCodec codec = MediaCodec.createEncoderByType(MIME);
         MediaFormat format = MediaFormat.createVideoFormat(MIME, width, height);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, bitRateFor(width, height));
+        format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
         format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL_SECONDS);
         format.setInteger(MediaFormat.KEY_PRIORITY, 0);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -182,10 +251,14 @@ final class VideoStreamer implements Runnable {
         }
     }
 
-    private static int bitRateFor(int width, int height) {
+    private static int bitRateFor(int width, int height, int fps) {
         long pixels = (long) width * height;
-        long target = pixels * NOMINAL_FPS / 4;
-        return (int) Math.max(900_000L, Math.min(8_000_000L, target));
+        long target = pixels * Math.max(1, fps) / 4;
+        return (int) Math.max(900_000L, Math.min(12_000_000L, target));
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static int even(int value) {

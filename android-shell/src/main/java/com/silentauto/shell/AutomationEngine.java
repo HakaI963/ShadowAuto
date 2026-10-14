@@ -25,9 +25,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class AutomationEngine {
-    private static final int MAX_STEPS = 25;
     private static final int MAX_OBSERVATION_TOOL_CALLS = 2;
     private static final int MAX_UI_CHARS = 200_000;
+    private static final int PROGRESS_LOG_EVERY_STEPS = 25;
     private static final int LOGCAT_LAYOUT_CHUNK = 3500;
     private static final String TOOL_SYSTEM_PROMPT = """
             You operate Android only by calling exactly one provided tool. Do not describe the action.
@@ -175,9 +175,12 @@ final class AutomationEngine {
             logs.task(task.taskId, "launched " + app.packageName);
             sleep(task, 1200);
 
-            for (int step = 1; step <= MAX_STEPS && !task.stop.get(); step++) {
+            for (int step = 1; !task.stop.get(); step++) {
                 String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
                 rememberUiObservation(task, dump);
+                if (step > 1 && (step - 1) % PROGRESS_LOG_EVERY_STEPS == 0) {
+                    logs.task(task.taskId, "still running at step " + step + " (no step limit; stop from the app to end)");
+                }
                 ActionDecision action = nextAction(task, ai, bridge, request.goal, app.packageName, step, task.display.displayId, dump);
                 action = applyAutoCorrections(task, action);
                 logs.task(task.taskId, "step " + step + ": " + action.action + " " + safe(action.reason));
@@ -252,7 +255,7 @@ final class AutomationEngine {
             } else if (task.completed) {
                 doneMessage = "automation finished";
             } else {
-                throw new IllegalStateException("max automation steps reached before finish");
+                doneMessage = "automation ended";
             }
         } catch (Throwable e) {
             if (task.stop.get()) {
@@ -510,7 +513,7 @@ final class AutomationEngine {
                 11. Search text candidate is the text to enter after opening a search field. If it is non-empty and the previous action clicked or focused a search/input field, call input_text with exactly that text; do not wait.
                 12. Do not call wait repeatedly on sparse or empty UI. After two waits, call get_ui_layout, get_screen_ocr, input_text, press_back, scroll_ui, or another concrete tool.
                 13. If a search was submitted and the UI dump has windows but inputs=[] and targets=[], the page may be visually rendered but accessibility-opaque. Do not press_back or restart the search only because nodes are missing. Prefer get_screen_ocr, get_ui_layout(full), wait once, or scroll_ui.
-                14. Extra user messages marked as operator updates override earlier plans. Follow the latest operator update from the next action on.
+                14. Operator updates may arrive inside the prompt marked OPERATOR UPDATE; the latest operator update overrides earlier plans. Follow it from the next action on.
                 Goal: %s
                 Package: %s
                 Step: %d
@@ -525,11 +528,14 @@ final class AutomationEngine {
                 task.lastUiWindows, task.lastUiInputs, task.lastUiTargets, task.sparseUiAfterSearch, safe(task.lastUiWindowSource), truncate(uiDump, MAX_UI_CHARS));
         JsonArray messages = new JsonArray();
         messages.add(AiClient.message("system", TOOL_SYSTEM_PROMPT));
-        messages.add(AiClient.message("user", prompt));
+        String userPrompt = prompt;
         String guide = drainGuides(task);
         if (!guide.isEmpty()) {
-            messages.add(AiClient.message("user", "Operator update (follow it from the next action on):\n" + guide));
+            logs.task(task.taskId, "operator guide applied");
+            userPrompt = "OPERATOR UPDATE - this overrides earlier plans, follow it now:\n"
+                    + guide + "\n\n" + prompt;
         }
+        messages.add(AiClient.message("user", userPrompt));
         JsonArray tools = ActionTools.tools();
         for (int observationCalls = 0; observationCalls <= MAX_OBSERVATION_TOOL_CALLS; observationCalls++) {
             AiClient.ToolResult result = ai.callTools(messages, tools);

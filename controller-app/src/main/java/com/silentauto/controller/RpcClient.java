@@ -31,16 +31,18 @@ final class RpcClient {
         this.listener = listener;
     }
 
-    synchronized void send(String method, JSONObject params) throws Exception {
+    synchronized int send(String method, JSONObject params) throws Exception {
         connect();
+        int id = ids.getAndIncrement();
         JSONObject request = new JSONObject();
         request.put("jsonrpc", "2.0");
-        request.put("id", ids.getAndIncrement());
+        request.put("id", id);
         request.put("method", method);
         request.put("params", params);
         writer.write(request.toString());
         writer.write('\n');
         writer.flush();
+        return id;
     }
 
     private synchronized void connect() throws Exception {

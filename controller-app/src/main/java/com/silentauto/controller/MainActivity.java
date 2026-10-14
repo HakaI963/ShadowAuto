@@ -27,8 +27,10 @@ import org.json.JSONObject;
 import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,6 +45,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     private final ExecutorService io = Executors.newCachedThreadPool();
     private final AtomicInteger nextTask = new AtomicInteger(1);
     private final List<AutomationTaskView> tasks = Collections.synchronizedList(new ArrayList<>());
+    private final Map<Integer, String> pendingGuides = new HashMap<>();
 
     private AiConfigStore configStore;
     private AiConfig config = new AiConfig("", "", "");
@@ -330,9 +333,11 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             JSONObject params = new JSONObject();
             params.put("taskId", task.taskId());
             params.put("text", text);
-            rpcClient.send("guideTask", params);
+            int id = rpcClient.send("guideTask", params);
+            synchronized (pendingGuides) {
+                pendingGuides.put(id, task.taskId());
+            }
             task.append("[guide] " + text);
-            main.post(() -> Toast.makeText(this, getString(R.string.guide_sent), Toast.LENGTH_SHORT).show());
         } catch (Exception e) {
             reportRpcError(task, e);
         }
@@ -348,9 +353,42 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         }
     }
 
+    /**
+     * Handles JSON-RPC responses (as opposed to events). Matches guideTask
+     * replies so the toast only claims success when the SERVER accepted the
+     * guide; server-side errors are shown instead of failing silently.
+     */
+    private void handleRpcResponse(JSONObject object) {
+        int id = object.optInt("id", -1);
+        String taskId;
+        synchronized (pendingGuides) {
+            taskId = pendingGuides.remove(id);
+        }
+        if (object.has("error")) {
+            JSONObject error = object.optJSONObject("error");
+            String message = error == null || error.optString("message").isEmpty()
+                    ? "request failed" : error.optString("message");
+            AutomationTaskView task = taskId == null ? null : taskById(taskId);
+            if (task != null) {
+                task.append("[guide failed] " + message);
+            } else {
+                appendGlobal("[rpc error] " + message);
+            }
+            main.post(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+            return;
+        }
+        if (taskId != null) {
+            main.post(() -> Toast.makeText(this, getString(R.string.guide_sent), Toast.LENGTH_SHORT).show());
+        }
+    }
+
     private void handleRpcLine(String line) {
         try {
             JSONObject object = new JSONObject(line);
+            if (object.has("error") || (object.has("result") && object.has("id"))) {
+                handleRpcResponse(object);
+                return;
+            }
             if (!"event".equals(object.optString("method"))) {
                 return;
             }
