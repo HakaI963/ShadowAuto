@@ -5,6 +5,8 @@
     <color name="primary">#4E68A4</color>
     <color name="primary_dark">#31456F</color>
     <color name="danger">#B3261E</color>
+    <color name="ok">#1E8E3E</color>
+    <color name="warn">#E8710A</color>
     <color name="text">#151927</color>
     <color name="muted">#666A78</color>
     <color name="line">#E2E0EC</color>

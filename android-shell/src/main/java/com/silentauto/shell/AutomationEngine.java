@@ -628,8 +628,22 @@ final class AutomationEngine {
         }
     }
 
-    private PaddleOcrEngine getOcrEngine() throws Exception {
-        if (ocr == null) {
+    synchronized JsonObject ocrStatusJson() {
+        JsonObject object = new JsonObject();
+        object.addProperty("ocr_root", PaddleOcrEngine.DEFAULT_ROOT);
+        object.addProperty("diagnosis", ocrDiagnosis());
+        object.addProperty("native_available", PaddleOcrEngine.isNativeAvailable());
+        try {
+            getOcrEngine();
+            object.addProperty("ocr_available", true);
+        } catch (Throwable e) {
+            object.addProperty("ocr_available", false);
+            object.addProperty("error", e.getMessage());
+        }
+        return object;
+    }
+
+    private PaddleOcrEngine getOcrEngine() throws Exception {        if (ocr == null) {
             logs.logcat(null, "ocr_engine_init_begin");
             ocr = new PaddleOcrEngine();
             ocr.init();

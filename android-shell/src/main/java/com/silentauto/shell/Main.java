@@ -9,6 +9,8 @@ import java.io.IOException;
 
 public final class Main {
     private static final String PROCESS_MARKER = "com.silentauto.shell.Main";
+    private static volatile AutomationEngine activeEngine;
+    private static volatile LogHub activeLogs;
 
     static {
         installGlobalExceptionLogger();
@@ -39,6 +41,8 @@ public final class Main {
             return;
         }
         AutomationEngine engine = new AutomationEngine(config, logs);
+        activeEngine = engine;
+        activeLogs = logs;
         logs.info("silent shell listening on 127.0.0.1:" + config.port);
         Thread rpcThread = new Thread(() -> runRpcServer(config, logs, engine), "rpc-server");
         rpcThread.start();
@@ -77,8 +81,22 @@ public final class Main {
         }
     }
 
-    private static void runRpcServer(Config config, LogHub logs, AutomationEngine engine) {
+    static void shutdown() {
         try {
+            if (activeEngine != null) {
+                activeEngine.stopTask();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (activeLogs != null) {
+                activeLogs.task("shell shutdown requested");
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void runRpcServer(Config config, LogHub logs, AutomationEngine engine) {        try {
             new RpcServer(config.port, engine, logs).run();
         } catch (Throwable e) {
             logs.error("rpc server failed", e);

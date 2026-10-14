@@ -67,6 +67,9 @@ final class RpcServer {
             if ("status".equals(method)) {
                 return JsonRpc.result(id, engine.statusJson());
             }
+            if ("ocrStatus".equals(method)) {
+                return JsonRpc.result(id, engine.ocrStatusJson());
+            }
             if ("logs".equals(method)) {
                 return JsonRpc.result(id, JsonRpc.stringArray(logs.snapshot()));
             }

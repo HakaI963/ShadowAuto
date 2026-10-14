@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
@@ -18,7 +19,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import rikka.shizuku.Shizuku;
-
 import androidx.viewpager2.widget.ViewPager2;
 
 import org.json.JSONObject;
@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends Activity implements AutomationTaskView.Listener, RpcClient.Listener {
     private static final int PORT = 43110;
@@ -51,9 +52,24 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     private boolean configOpen;
     private TextView serverStatus;
     private Button serverButton;
+    private Button stopServerButton;
+    private View serverDot;
+    private TextView ocrStatus;
+    private Button ocrButton;
+    private View ocrDot;
     private boolean serverStarting;
+    private boolean serverStopping;
     private Shizuku.UserServiceArgs userServiceArgs;
     private ServiceConnection userServiceConn;
+    private final AtomicReference<IBinder> shellBinder = new AtomicReference<>();
+    private ShizukuServerManager.OcrStatus lastOcr;
+    private final Runnable statusPoll = new Runnable() {
+        @Override
+        public void run() {
+            refreshServerStatus();
+            main.postDelayed(this, 3000);
+        }
+    };
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             this::onShizukuPermissionResult;
     private final Shizuku.OnBinderReceivedListener shizukuBinderListener =
@@ -85,7 +101,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     @Override
     protected void onResume() {
         super.onResume();
-        refreshServerStatus();
+        startPoll();
         if (configStore == null) {
             return;
         }
@@ -111,8 +127,26 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     }
 
     @Override
+    protected void onPause() {
+        stopPoll();
+        super.onPause();
+    }
+
+    @Override
     public void onTaskStart(AutomationTaskView task) {
-        io.execute(() -> sendStart(task));
+        io.execute(() -> {
+            boolean running;
+            try {
+                running = ShizukuServerManager.isServerRunning();
+            } catch (Throwable t) {
+                running = false;
+            }
+            if (!running) {
+                reportRpcError(task, new ConnectException(getString(R.string.rpc_shell_unavailable)));
+                return;
+            }
+            sendStart(task);
+        });
     }
 
     @Override
@@ -146,6 +180,8 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         }
         userServiceArgs = null;
         userServiceConn = null;
+        shellBinder.set(null);
+        stopPoll();
         io.shutdownNow();
         super.onDestroy();
     }
@@ -374,51 +410,54 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         indicator.setText(dots.toString());
     }
 
+    private void startPoll() {
+        main.removeCallbacks(statusPoll);
+        main.post(statusPoll);
+    }
+
+    private void stopPoll() {
+        main.removeCallbacks(statusPoll);
+    }
+
     private void setupServerBar() {
+        serverDot = findViewById(R.id.serverDot);
         serverStatus = findViewById(R.id.serverStatus);
         serverButton = findViewById(R.id.serverButton);
-        if (serverStatus == null || serverButton == null) {
-            return;
+        stopServerButton = findViewById(R.id.stopServerButton);
+        ocrDot = findViewById(R.id.ocrDot);
+        ocrStatus = findViewById(R.id.ocrStatus);
+        ocrButton = findViewById(R.id.ocrButton);
+        if (serverButton != null) {
+            serverButton.setOnClickListener(v -> onServerButton());
         }
-        serverButton.setOnClickListener(v -> onServerButton());
+        if (stopServerButton != null) {
+            stopServerButton.setOnClickListener(v -> onStopServerButton());
+        }
+        if (ocrButton != null) {
+            ocrButton.setOnClickListener(v -> onOcrButton());
+        }
     }
 
     private void onServerButton() {
-        if (serverStarting) {
+        if (serverStarting || serverStopping) {
             return;
         }
         io.execute(() -> {
-            boolean running;
-            try {
-                running = ShizukuServerManager.isServerRunning();
-            } catch (Throwable t) {
-                running = false;
-            }
+            boolean running = safeProbe();
             if (running) {
                 main.post(() -> Toast.makeText(this,
                         getString(R.string.server_running), Toast.LENGTH_SHORT).show());
                 refreshServerStatus();
                 return;
             }
-            boolean binder;
-            try {
-                binder = ShizukuServerManager.isBinderAlive();
-            } catch (Throwable t) {
-                binder = false;
-            }
+            boolean binder = safeBinder();
             if (!binder) {
                 main.post(() -> Toast.makeText(this,
                         getString(R.string.shizuku_missing), Toast.LENGTH_LONG).show());
                 refreshServerStatus();
                 return;
             }
-            boolean perm;
-            try {
-                perm = ShizukuServerManager.hasPermission();
-            } catch (Throwable t) {
-                perm = false;
-            }
-            if (!perm) {
+            if (!safePermission()) {
                 main.post(() -> Toast.makeText(this,
                         getString(R.string.shizuku_requesting), Toast.LENGTH_SHORT).show());
                 ShizukuServerManager.requestPermission();
@@ -426,7 +465,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             }
             main.post(() -> {
                 serverStarting = true;
-                refreshServerStatusUi();
+                refreshServerStatus();
             });
             if (userServiceArgs == null) {
                 userServiceArgs = ShizukuServerManager.serviceArgs(this);
@@ -435,8 +474,8 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 userServiceConn = ShizukuServerManager.connection((ok, msg) -> main.post(() -> {
                     serverStarting = false;
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-                    refreshServerStatusUi();
-                }));
+                    refreshServerStatus();
+                }), shellBinder);
             }
             ShizukuServerManager.startServer(this, userServiceArgs, userServiceConn,
                     (ok, msg) -> main.post(() -> {
@@ -444,8 +483,86 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                         if (!ok) {
                             Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
                         }
-                        refreshServerStatusUi();
+                        refreshServerStatus();
                     }));
+        });
+    }
+
+    private void onStopServerButton() {
+        if (serverStarting || serverStopping) {
+            return;
+        }
+        io.execute(() -> {
+            if (!safeProbe()) {
+                main.post(this::refreshServerStatus);
+                return;
+            }
+            main.post(() -> {
+                serverStopping = true;
+                refreshServerStatus();
+            });
+            IBinder bound = shellBinder.get();
+            if (bound != null && userServiceArgs != null && userServiceConn != null) {
+                ShizukuServerManager.stopServer(bound, userServiceArgs, userServiceConn,
+                        (ok, msg) -> main.post(() -> onServerStopped(ok, msg)));
+            } else {
+                if (userServiceArgs == null) {
+                    userServiceArgs = ShizukuServerManager.serviceArgs(this);
+                }
+                ShizukuServerManager.ensureBoundThenStop(this, userServiceArgs, shellBinder,
+                        (ok, msg) -> main.post(() -> onServerStopped(ok, msg)));
+            }
+        });
+    }
+
+    private void onServerStopped(boolean ok, String msg) {
+        serverStopping = false;
+        if (ok) {
+            shellBinder.set(null);
+            userServiceConn = null;
+            synchronized (tasks) {
+                for (AutomationTaskView task : tasks) {
+                    task.setRunning(false);
+                }
+            }
+        }
+        Toast.makeText(this, msg, ok ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show();
+        refreshServerStatus();
+    }
+
+    private void onOcrButton() {
+        io.execute(() -> {
+            if (!safeProbe()) {
+                main.post(() -> Toast.makeText(this,
+                        getString(R.string.ocr_no_server), Toast.LENGTH_SHORT).show());
+                return;
+            }
+            ShizukuServerManager.OcrStatus cached = lastOcr;
+            boolean needFix = cached == null || !cached.serverUp || !cached.available;
+            if (!needFix) {
+                refreshServerStatus();
+                return;
+            }
+            main.post(() -> {
+                if (ocrStatus != null) {
+                    ocrStatus.setText(getString(R.string.ocr_deploying));
+                }
+                if (ocrButton != null) {
+                    ocrButton.setEnabled(false);
+                }
+            });
+            String result;
+            try {
+                result = OcrAssetDeployer.deploy(this, true);
+            } catch (Throwable e) {
+                result = "ocr deploy failed: " + e.getMessage();
+            }
+            String message = "[ocr] " + result;
+            main.post(() -> {
+                appendGlobal(message);
+                Toast.makeText(this, getString(R.string.ocr_fixed), Toast.LENGTH_SHORT).show();
+                refreshServerStatus();
+            });
         });
     }
 
@@ -460,57 +577,152 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             String message = "[ocr] " + result;
             main.post(() -> {
                 appendGlobal(message);
-                refreshServerStatusUi();
+                refreshServerStatus();
             });
         });
     }
 
     private void refreshServerStatus() {
-        main.post(this::refreshServerStatusUi);
+        io.execute(() -> {
+            boolean running = safeProbe();
+            if (!running) {
+                boolean binder = safeBinder();
+                boolean perm = binder && safePermission();
+                main.post(() -> renderServerStopped(binder, perm));
+                return;
+            }
+            ShizukuServerManager.queryOcrStatus(ocr -> main.post(() -> renderServerRunning(ocr)));
+        });
     }
 
-    private void refreshServerStatusUi() {
-        if (serverStatus == null || serverButton == null) {
+    private void renderServerStopped(boolean binder, boolean perm) {
+        if (serverStatus == null) {
             return;
         }
-        boolean running;
-        try {
-            running = ShizukuServerManager.isServerRunning();
-        } catch (Throwable t) {
-            running = false;
+        if (serverDot != null) {
+            serverDot.setBackgroundResource(R.drawable.dot_red);
         }
-        if (running) {
-            serverStatus.setText(getString(R.string.server_running));
-            serverButton.setText(getString(R.string.server_running));
-            serverButton.setEnabled(false);
-            return;
-        }
-        serverButton.setEnabled(!serverStarting);
         if (serverStarting) {
             serverStatus.setText(getString(R.string.server_starting));
-            serverButton.setText(getString(R.string.server_starting));
-            return;
-        }
-        boolean binder;
-        boolean perm;
-        try {
-            binder = ShizukuServerManager.isBinderAlive();
-        } catch (Throwable t) {
-            binder = false;
-        }
-        try {
-            perm = ShizukuServerManager.hasPermission();
-        } catch (Throwable t) {
-            perm = false;
-        }
-        if (!binder) {
+        } else if (serverStopping) {
+            serverStatus.setText(getString(R.string.server_stopping));
+        } else if (!binder) {
             serverStatus.setText(getString(R.string.shizuku_missing));
         } else if (!perm) {
             serverStatus.setText(getString(R.string.shizuku_denied));
         } else {
             serverStatus.setText(getString(R.string.server_stopped));
         }
-        serverButton.setText(getString(R.string.server_start));
+        if (serverButton != null) {
+            serverButton.setText(serverStarting
+                    ? getString(R.string.server_starting) : getString(R.string.server_start));
+            serverButton.setEnabled(!serverStarting && !serverStopping);
+        }
+        if (stopServerButton != null) {
+            stopServerButton.setText(getString(R.string.server_stop));
+            stopServerButton.setEnabled(false);
+        }
+        if (ocrDot != null) {
+            ocrDot.setBackgroundResource(R.drawable.dot_yellow);
+        }
+        if (ocrStatus != null) {
+            ocrStatus.setText(getString(R.string.ocr_no_server));
+        }
+        if (ocrButton != null) {
+            ocrButton.setText(getString(R.string.ocr_retest));
+            ocrButton.setEnabled(false);
+        }
+    }
+
+    private void renderServerRunning(ShizukuServerManager.OcrStatus ocr) {
+        if (serverStatus == null) {
+            return;
+        }
+        lastOcr = ocr;
+        if (serverDot != null) {
+            serverDot.setBackgroundResource(R.drawable.dot_green);
+        }
+        if (serverStopping) {
+            serverStatus.setText(getString(R.string.server_stopping));
+        } else {
+            serverStatus.setText(getString(R.string.server_running));
+        }
+        if (serverButton != null) {
+            serverButton.setText(getString(R.string.server_running));
+            serverButton.setEnabled(false);
+        }
+        if (stopServerButton != null) {
+            stopServerButton.setText(getString(R.string.server_stop));
+            stopServerButton.setEnabled(!serverStopping);
+        }
+        if (ocr == null || !ocr.serverUp) {
+            if (ocrDot != null) {
+                ocrDot.setBackgroundResource(R.drawable.dot_yellow);
+            }
+            if (ocrStatus != null) {
+                ocrStatus.setText(getString(R.string.ocr_checking));
+            }
+            if (ocrButton != null) {
+                ocrButton.setText(getString(R.string.ocr_retest));
+                ocrButton.setEnabled(true);
+            }
+            return;
+        }
+        if (ocr.available) {
+            if (ocrDot != null) {
+                ocrDot.setBackgroundResource(R.drawable.dot_green);
+            }
+            if (ocrStatus != null) {
+                ocrStatus.setText(getString(R.string.ocr_ready));
+            }
+            if (ocrButton != null) {
+                ocrButton.setText(getString(R.string.ocr_retest));
+                ocrButton.setEnabled(true);
+            }
+            return;
+        }
+        if (ocrDot != null) {
+            ocrDot.setBackgroundResource(R.drawable.dot_red);
+        }
+        if (ocrStatus != null) {
+            String detail = ocr.error == null || ocr.error.isEmpty() ? ocr.diagnosis : ocr.error;
+            if (detail == null || detail.isEmpty()) {
+                ocrStatus.setText(getString(R.string.ocr_missing));
+            } else {
+                if (detail.length() > 120) {
+                    detail = detail.substring(0, 120) + "…";
+                }
+                ocrStatus.setText(getString(R.string.ocr_broken, detail));
+            }
+        }
+        if (ocrButton != null) {
+            ocrButton.setText(getString(R.string.ocr_fix));
+            ocrButton.setEnabled(true);
+        }
+    }
+
+    private boolean safeProbe() {
+        try {
+            return ShizukuServerManager.isServerRunning();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean safeBinder() {
+        try {
+            return ShizukuServerManager.isBinderAlive();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean safePermission() {
+        try {
+            return ShizukuServerManager.hasPermission();
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private void onShizukuPermissionResult(int requestCode, int grantResult) {

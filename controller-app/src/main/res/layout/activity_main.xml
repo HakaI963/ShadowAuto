@@ -74,6 +74,13 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <View
+                android:id="@+id/serverDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/dot_red" />
+
             <TextView
                 android:id="@+id/serverStatus"
                 android:layout_width="0dp"
@@ -89,6 +96,48 @@
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
                 android:text="@string/server_start"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/stopServerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minHeight="40dp"
+                android:text="@string/server_stop"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ocrBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/ocrDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/dot_yellow" />
+
+            <TextView
+                android:id="@+id/ocrStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/ocr_checking"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/ocrButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                android:text="@string/ocr_retest"
                 android:textAllCaps="false" />
         </LinearLayout>
 

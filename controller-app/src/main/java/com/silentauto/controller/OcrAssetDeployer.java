@@ -41,6 +41,10 @@ public final class OcrAssetDeployer {
     }
 
     public static String deploy(Context context) {
+        return deploy(context, false);
+    }
+
+    public static String deploy(Context context, boolean force) {
         StringBuilder log = new StringBuilder();
         try {
             File root = new File(OCR_ROOT);
@@ -53,12 +57,12 @@ public final class OcrAssetDeployer {
 
             AssetManager assets = context.getAssets();
             for (String assetPath : MODEL_FILES) {
-                copyAsset(assets, assetPath, new File(root, assetPath.substring("ocr/".length())), log);
+                copyAsset(assets, assetPath, new File(root, assetPath.substring("ocr/".length())), log, force);
             }
             for (String assetPath : LABEL_FILES) {
-                copyAsset(assets, assetPath, new File(root, assetPath.substring("ocr/".length())), log);
+                copyAsset(assets, assetPath, new File(root, assetPath.substring("ocr/".length())), log, force);
             }
-            copyNativeLibs(context, libDir, log);
+            copyNativeLibs(context, libDir, log, force);
             chmodRecursive(root);
             log.append("ocr deploy done: ").append(diagnose());
         } catch (Throwable e) {
@@ -101,16 +105,14 @@ public final class OcrAssetDeployer {
         }
     }
 
-    private static void copyAsset(AssetManager assets, String assetPath, File dest, StringBuilder log) {
+    private static void copyAsset(AssetManager assets, String assetPath, File dest, StringBuilder log, boolean force) {
         try {
-            if (dest.isFile() && dest.length() > 0) {
-                try (InputStream probe = assets.open(assetPath)) {
-                    if (probe.available() == dest.length()) {
-                        makeWorldReadable(dest);
-                        return;
-                    }
-                } catch (Throwable ignored) {
-                }
+            // Note: AssetInputStream.available() is unreliable for compressed
+            // assets, so only skip when not forcing and a non-empty file exists.
+            // Shell-side redeploy (ShellUserService) always overwrites.
+            if (!force && dest.isFile() && dest.length() > 0) {
+                makeWorldReadable(dest);
+                return;
             }
             File parent = dest.getParentFile();
             if (parent != null) {
@@ -131,7 +133,7 @@ public final class OcrAssetDeployer {
         }
     }
 
-    private static void copyNativeLibs(Context context, File libDir, StringBuilder log) {
+    private static void copyNativeLibs(Context context, File libDir, StringBuilder log, boolean force) {
         String nativeDir = context.getApplicationInfo().nativeLibraryDir;
         if (nativeDir == null) {
             log.append("nativeLibraryDir is null; ");
@@ -145,7 +147,7 @@ public final class OcrAssetDeployer {
             }
             File dest = new File(libDir, name);
             try {
-                if (dest.isFile() && dest.length() == src.length()) {
+                if (!force && dest.isFile() && dest.length() == src.length()) {
                     makeWorldReadable(dest);
                     continue;
                 }
