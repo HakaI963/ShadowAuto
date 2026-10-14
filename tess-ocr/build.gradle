@@ -5,8 +5,8 @@ plugins {
 android {
     namespace = "com.silentauto.tessocr"
     compileSdk = 36
-    // Pinned so AGP packages a matching libc++_shared.so for tess-two's
-    // prebuilt native libs. No CMake build in this module.
+    // Pinned so AGP resolves a matching NDK (source of libc++_shared.so).
+    // No CMake build in this module.
     ndkVersion = "23.1.7779620"
 
     defaultConfig {
@@ -35,9 +35,41 @@ dependencies {
 // build of its own, but tess's prebuilt .so files link against it. Copy it
 // from the NDK into packaged jniLibs so it lands in every consuming APK
 // (and therefore in nativeLibraryDir, from which OCR deploys it).
+// NOTE: the NDK is located lazily at execution time; configuration never
+// touches it, so even `gradle tasks` works without an NDK installed.
+File findLibcxxShared() {
+    List<File> roots = []
+    String envNdk = System.getenv("ANDROID_NDK_HOME")
+    if (envNdk) {
+        roots.add(new File(envNdk))
+    }
+    try {
+        File sdkNdk = new File(android.sdkDirectory, "ndk")
+        if (sdkNdk.isDirectory()) {
+            File[] vers = sdkNdk.listFiles()
+            if (vers) {
+                List<File> ordered = vers.toList().sort { a, b -> b.name <=> a.name }
+                File pinned = new File(sdkNdk, "23.1.7779620")
+                ordered.remove(pinned)
+                ordered.add(0, pinned)
+                roots.addAll(ordered)
+            }
+        }
+    } catch (Throwable ignored) {
+    }
+    for (File ndk in roots) {
+        File candidate = new File(ndk,
+                "toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so")
+        if (candidate.isFile()) {
+            return candidate
+        }
+    }
+    throw new GradleException(
+            "libc++_shared.so not found; checked ANDROID_NDK_HOME and SDK ndk dirs")
+}
+
 tasks.register("copyLibcxxShared", Copy) {
-    from(new File(android.ndkDirectory,
-            "toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"))
+    from({ findLibcxxShared() })
     into("build/generated/jniLibs/arm64-v8a")
 }
 
