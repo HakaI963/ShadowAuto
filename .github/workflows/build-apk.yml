@@ -146,6 +146,13 @@ jobs:
             echo "--- which ---"
             which java keytool sdkmanager apksigner zipalign 2>&1
             java -version 2>&1 | head -3
+            echo "--- locate replay (each cmd with rc) ---"
+            R="/usr/local/lib/android/sdk"; echo "ls SDK_ROOT rc=$?:"; ls "$R/build-tools" 2>&1 | head -6; echo "rc=$?"
+            echo "keytool probe:"; keytool -help 2>&1 | head -2; echo "rc=$?"
+            echo "genkeypair dry-run to /tmp:"
+            keytool -genkeypair -keystore /tmp/probe.keystore -alias probe -keyalg RSA -keysize 2048 -validity 30 -storepass x -keypass x -dname "CN=T" 2>&1 | tail -3; echo "rc=$?"
+            ls -la /tmp/probe.keystore 2>&1
+            echo "mkdir probe:"; mkdir -p signed-apks && echo "mkdir rc=0" || echo "mkdir rc=$?"
             echo "--- sdk candidates ---"
             for d in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}" "$HOME/Android/Sdk" /usr/local/lib/android/sdk /opt/android-sdk; do
               [ -n "$d" ] || continue
