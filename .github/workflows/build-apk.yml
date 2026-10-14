@@ -49,6 +49,7 @@ jobs:
 
       - name: Sign release APKs
         run: |
+          df -h "$GITHUB_WORKSPACE" | tail -2
           keytool -genkeypair -v \
             -keystore release.keystore \
             -alias shadowauto \
@@ -58,10 +59,19 @@ jobs:
           mkdir -p signed-apks
           APKSIGNER="$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | tail -n 1)"
           ZIPALIGN="$(ls "$ANDROID_SDK_ROOT"/build-tools/*/zipalign | tail -n 1)"
+          [ -x "$APKSIGNER" ] || { echo "FATAL: apksigner not executable: $APKSIGNER"; ls "$ANDROID_SDK_ROOT/build-tools" ; exit 1; }
+          [ -x "$ZIPALIGN" ] || { echo "FATAL: zipalign not executable: $ZIPALIGN"; exit 1; }
+          echo "=== release APKs to sign ==="
+          find . -path '*/build/outputs/apk/release/*.apk' -exec ls -lh {} \;
+          COUNT="$(find . -path '*/build/outputs/apk/release/*-release-unsigned.apk' | wc -l)"
+          [ "$COUNT" -gt 0 ] || { echo "FATAL: no unsigned release APKs found"; exit 1; }
           for apk in $(find . -path '*/build/outputs/apk/release/*-release-unsigned.apk'); do
             base="$(basename "$apk" -release-unsigned.apk)"
+            echo "=== zipalign $apk ==="
             "$ZIPALIGN" -f -p 4 "$apk" "signed-apks/${base}-release.apk"
+            echo "=== apksigner sign ${base}-release.apk ==="
             "$APKSIGNER" sign --ks release.keystore --ks-pass pass:shadowauto --key-pass pass:shadowauto "signed-apks/${base}-release.apk"
+            "$APKSIGNER" verify "signed-apks/${base}-release.apk" && echo "verified ${base}-release.apk"
           done
           # Unified APK = controller UI + shell server + OCR assets + Shizuku starter.
           if [ -f signed-apks/controller-app-release.apk ]; then
