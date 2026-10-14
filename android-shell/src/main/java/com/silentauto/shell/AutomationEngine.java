@@ -88,7 +88,8 @@ final class AutomationEngine {
     synchronized void guideTask(String taskId, String text) {
         TaskState task = tasks.get(taskId);
         if (task == null) {
-            throw new IllegalArgumentException("unknown task: " + taskId);
+            throw new IllegalArgumentException("unknown task " + taskId
+                    + " (it may have finished - tap Run to start it again)");
         }
         String trimmed = text == null ? "" : text.trim();
         if (trimmed.isEmpty()) {

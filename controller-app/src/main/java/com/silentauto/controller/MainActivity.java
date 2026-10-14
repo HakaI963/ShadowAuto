@@ -46,6 +46,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     private final AtomicInteger nextTask = new AtomicInteger(1);
     private final List<AutomationTaskView> tasks = Collections.synchronizedList(new ArrayList<>());
     private final Map<Integer, String> pendingGuides = new HashMap<>();
+    private final Map<Integer, String> pendingStarts = new HashMap<>();
 
     private AiConfigStore configStore;
     private AiConfig config = new AiConfig("", "", "");
@@ -314,7 +315,10 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             params.put("apiKey", config.apiKey);
             params.put("apiBase", config.apiBase);
             params.put("model", config.model);
-            rpcClient.send("startTask", params);
+            int id = rpcClient.send("startTask", params);
+            synchronized (pendingStarts) {
+                pendingStarts.put(id, task.taskId());
+            }
         } catch (Exception e) {
             reportRpcError(task, e);
         }
@@ -354,30 +358,44 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     }
 
     /**
-     * Handles JSON-RPC responses (as opposed to events). Matches guideTask
-     * replies so the toast only claims success when the SERVER accepted the
-     * guide; server-side errors are shown instead of failing silently.
+     * Handles JSON-RPC responses (as opposed to events). Matches startTask
+     * and guideTask replies: success is acknowledged, server-side errors are
+     * shown, and tasks that do not exist server-side are marked stopped
+     * locally so the UI never shows phantom running tasks.
      */
     private void handleRpcResponse(JSONObject object) {
         int id = object.optInt("id", -1);
-        String taskId;
+        String guideTaskId;
         synchronized (pendingGuides) {
-            taskId = pendingGuides.remove(id);
+            guideTaskId = pendingGuides.remove(id);
+        }
+        String startTaskId;
+        synchronized (pendingStarts) {
+            startTaskId = pendingStarts.remove(id);
         }
         if (object.has("error")) {
             JSONObject error = object.optJSONObject("error");
             String message = error == null || error.optString("message").isEmpty()
                     ? "request failed" : error.optString("message");
-            AutomationTaskView task = taskId == null ? null : taskById(taskId);
-            if (task != null) {
-                task.append("[guide failed] " + message);
+            if (guideTaskId != null) {
+                AutomationTaskView task = taskById(guideTaskId);
+                if (task != null) {
+                    task.append("[guide failed] " + message);
+                    if (message.contains("unknown task")) {
+                        task.setRunning(false);
+                    }
+                } else {
+                    appendGlobal("[guide failed] " + message);
+                }
+            } else if (startTaskId != null) {
+                reportRpcError(taskById(startTaskId), new Exception(message));
             } else {
                 appendGlobal("[rpc error] " + message);
             }
             main.post(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
             return;
         }
-        if (taskId != null) {
+        if (guideTaskId != null) {
             main.post(() -> Toast.makeText(this, getString(R.string.guide_sent), Toast.LENGTH_SHORT).show());
         }
     }
@@ -616,14 +634,18 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         if (ok) {
             shellBinder.set(null);
             userServiceConn = null;
-            synchronized (tasks) {
-                for (AutomationTaskView task : tasks) {
-                    task.setRunning(false);
-                }
-            }
+            markAllTasksStopped();
         }
         Toast.makeText(this, msg, ok ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show();
         refreshServerStatus();
+    }
+
+    private void markAllTasksStopped() {
+        synchronized (tasks) {
+            for (AutomationTaskView task : tasks) {
+                task.setRunning(false);
+            }
+        }
     }
 
     private void onOcrButton() {
@@ -703,6 +725,9 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             return;
         }
         watchdog();
+        // The server is down, so no task can be running anymore. Clear any
+        // phantom running pages now, or later guides hit "unknown task".
+        markAllTasksStopped();
         if (serverDot != null) {
             serverDot.setBackgroundResource((serverStarting || serverStopping)
                     ? R.drawable.dot_yellow : R.drawable.dot_red);
