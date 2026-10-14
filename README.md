@@ -161,7 +161,7 @@ This architecture keeps the automated app off the main display while still allow
 
 ## Tesseract Offline OCR
 
-The `tess-ocr` module contains the Tesseract Android integration (Tesseract4Android 4.8.0 (Tesseract 5.5) from JitPack, no NDK build) for visual fallback on self-rendered or accessibility-opaque pages. The shell process calls this module directly; the unified controller app bundles the same code plus traineddata assets and auto-deploys them on launch. OCR is enabled by default; download its traineddata files with:
+The `tess-ocr` module contains the Tesseract Android integration (Tesseract4Android 4.8.0 (Tesseract 5.5, AAR vendored in tess-ocr/libs), no NDK build) for visual fallback on self-rendered or accessibility-opaque pages. The shell process calls this module directly; the unified controller app bundles the same code plus traineddata assets and auto-deploys them on launch. OCR is enabled by default; download its traineddata files with:
 
 ```sh
 ./gradlew :tess-ocr:prepareTesseractOcr

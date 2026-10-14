@@ -11,13 +11,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Tesseract4Android (Tesseract 5.x AAR) is published via JitPack.
-        maven {
-            url "https://jitpack.io"
-            content {
-                includeGroup "com.github.adaptech-cz.Tesseract4Android"
-            }
-        }
     }
 }
 

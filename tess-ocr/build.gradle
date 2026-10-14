@@ -26,9 +26,12 @@ android {
 }
 
 dependencies {
-    // Tesseract 5.5 + Leptonica, prebuilt arm64/x86 .so via JitPack (cached
-    // 4.8.0 build). No NDK/CMake needed on our side.
-    implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0"
+    // Tesseract 5.5 + Leptonica, prebuilt arm64/x86 .so, vendored AAR
+    // (tess-ocr/libs) so CI never depends on external artifact hosts.
+    // The AAR's only transitive dep (androidx.annotation) is declared here
+    // because files() dependencies carry no POM metadata.
+    implementation files("libs/tesseract4android-4.8.0.aar")
+    implementation "androidx.annotation:annotation:1.3.0"
 }
 
 // AGP does not auto-package libc++_shared.so when the project has no native
