@@ -66,6 +66,10 @@ jobs:
             "$ZIPALIGN" -f -p 4 "$apk" "signed-apks/${base}-release.apk"
             "$APKSIGNER" sign --ks release.keystore --ks-pass pass:shadowauto --key-pass pass:shadowauto "signed-apks/${base}-release.apk"
           done
+          # Unified APK = controller UI + shell server + OCR assets + Shizuku starter.
+          if [ -f signed-apks/controller-app-release.apk ]; then
+            cp signed-apks/controller-app-release.apk signed-apks/ShadowAuto-unified-release.apk
+          fi
           ls -lh signed-apks
 
       - name: Prepare and package OCR runtime

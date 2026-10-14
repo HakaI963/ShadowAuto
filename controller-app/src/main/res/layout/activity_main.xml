@@ -66,6 +66,32 @@
                 android:tint="@color/primary_dark" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/serverBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/serverStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/server_stopped"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/serverButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="40dp"
+                android:text="@string/server_start"
+                android:textAllCaps="false" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/pageIndicator"
             android:layout_width="match_parent"

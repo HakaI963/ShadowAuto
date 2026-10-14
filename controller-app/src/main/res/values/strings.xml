@@ -30,7 +30,14 @@
     <string name="yes">Yes</string>
     <string name="stop_all_sent">Stop-all request sent</string>
     <string name="rpc_error">RPC error: %1$s</string>
-    <string name="rpc_shell_unavailable">Shell service is not running. Start ShadowAuto shell from the web launcher or ADB, then retry.</string>
+    <string name="rpc_shell_unavailable">Shell service is not running. Tap Start server above, then retry.</string>
+    <string name="server_start">Start server</string>
+    <string name="server_starting">Starting…</string>
+    <string name="server_running">Server running</string>
+    <string name="server_stopped">Server stopped</string>
+    <string name="shizuku_missing">Shizuku not running: start Shizuku, then tap Start server</string>
+    <string name="shizuku_denied">Shizuku permission needed: tap Start server to grant</string>
+    <string name="shizuku_requesting">Requesting Shizuku permission…</string>
     <string name="task_goal_hint">Use Meituan Waimai to order me a grande Starbucks vanilla latte</string>
     <string name="run">Run</string>
     <string name="running">Running</string>
