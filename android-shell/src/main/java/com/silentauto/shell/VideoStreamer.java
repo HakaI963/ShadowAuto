@@ -60,8 +60,9 @@ final class VideoStreamer implements Runnable {
                     if (!caps.isSizeSupported(width, height)) {
                         continue;
                     }
-                    Range<Integer> fpsRange = caps.getSupportedFrameRatesFor(width, height);
-                    fps = clamp(fps, fpsRange.getLower(), fpsRange.getUpper());
+                    Range<Double> fpsRange = caps.getSupportedFrameRatesFor(width, height);
+                    fps = clamp(fps, (int) Math.round(fpsRange.getLower()),
+                            (int) Math.round(fpsRange.getUpper()));
                     Range<Integer> bitrateRange = caps.getBitrateRange();
                     bitrate = clamp(bitRateFor(width, height, fps),
                             bitrateRange.getLower(), Math.min(bitrateRange.getUpper(), 15_000_000));
