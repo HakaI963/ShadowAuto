@@ -62,6 +62,10 @@
     <string name="ocr_deploying">正在部署 OCR…</string>
     <string name="ocr_fixed">OCR 已重新部署，正在复查…</string>
     <string name="task_goal_hint">用美团外卖给我买杯星巴克香草拿铁，大杯</string>
+    <string name="guide_hint">中途告诉它接下来做什么…</string>
+    <string name="guide_send">发送</string>
+    <string name="guide_sent">已发送——从下一步开始执行</string>
+    <string name="guide_empty">请先输入指示内容</string>
     <string name="run">执行</string>
     <string name="running">执行中</string>
     <string name="stop">停止</string>

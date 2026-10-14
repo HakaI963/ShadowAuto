@@ -62,6 +62,10 @@
     <string name="ocr_deploying">Deploying OCR…</string>
     <string name="ocr_fixed">OCR redeployed, rechecking…</string>
     <string name="task_goal_hint">Use Meituan Waimai to order me a grande Starbucks vanilla latte</string>
+    <string name="guide_hint">Tell it what to do next, mid-task…</string>
+    <string name="guide_send">Send</string>
+    <string name="guide_sent">Guide sent — applies from the next step</string>
+    <string name="guide_empty">Type guidance first</string>
     <string name="run">Run</string>
     <string name="running">Running</string>
     <string name="stop">Stop</string>

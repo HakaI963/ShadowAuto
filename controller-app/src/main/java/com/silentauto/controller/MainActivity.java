@@ -158,6 +158,17 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     }
 
     @Override
+    public void onGuide(AutomationTaskView task) {
+        String text = task.guideText();
+        if (text == null || text.trim().isEmpty()) {
+            main.post(() -> Toast.makeText(this, getString(R.string.guide_empty), Toast.LENGTH_SHORT).show());
+            return;
+        }
+        task.clearGuide();
+        io.execute(() -> sendGuide(task, text.trim()));
+    }
+
+    @Override
     public void onLine(String line) {
         handleRpcLine(line);
     }
@@ -311,6 +322,19 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             rpcClient.send("stopTask", new JSONObject().put("taskId", taskId));
         } catch (Exception e) {
             reportRpcError(taskById(taskId), e);
+        }
+    }
+
+    private void sendGuide(AutomationTaskView task, String text) {
+        try {
+            JSONObject params = new JSONObject();
+            params.put("taskId", task.taskId());
+            params.put("text", text);
+            rpcClient.send("guideTask", params);
+            task.append("[guide] " + text);
+            main.post(() -> Toast.makeText(this, getString(R.string.guide_sent), Toast.LENGTH_SHORT).show());
+        } catch (Exception e) {
+            reportRpcError(task, e);
         }
     }
 

@@ -12,9 +12,11 @@ import java.nio.ByteBuffer;
 
 final class VideoStreamer implements Runnable {
     private static final String MIME = MediaFormat.MIMETYPE_VIDEO_AVC;
-    private static final int FRAME_RATE = 30;
+    // No app-side frame cap: the encoder runs at the display's native rate.
+    // Bitrate is sized for 60fps so motion stays sharp; static screens cost
+    // almost nothing since no filler frames are requested.
+    private static final int NOMINAL_FPS = 60;
     private static final int I_FRAME_INTERVAL_SECONDS = 1;
-    private static final long REPEAT_PREVIOUS_FRAME_AFTER_US = 500_000L;
     private static final long DRAIN_TIMEOUT_US = 100_000L;
 
     private final LogHub logs;
@@ -60,13 +62,10 @@ final class VideoStreamer implements Runnable {
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitRateFor(width, height));
         format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
         format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL_SECONDS);
-        format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, REPEAT_PREVIOUS_FRAME_AFTER_US);
         format.setInteger(MediaFormat.KEY_PRIORITY, 0);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
-            format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, FRAME_RATE);
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
@@ -185,8 +184,8 @@ final class VideoStreamer implements Runnable {
 
     private static int bitRateFor(int width, int height) {
         long pixels = (long) width * height;
-        long target = pixels * FRAME_RATE / 4;
-        return (int) Math.max(900_000L, Math.min(5_000_000L, target));
+        long target = pixels * NOMINAL_FPS / 4;
+        return (int) Math.max(900_000L, Math.min(8_000_000L, target));
     }
 
     private static int even(int value) {

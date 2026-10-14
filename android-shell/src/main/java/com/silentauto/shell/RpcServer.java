@@ -90,6 +90,10 @@ final class RpcServer {
                 }
                 return JsonRpc.result(id, "stopped");
             }
+            if ("guideTask".equals(method)) {
+                engine.guideTask(JsonRpc.text(params, "taskId"), JsonRpc.text(params, "text"));
+                return JsonRpc.result(id, "queued");
+            }
             if ("startTask".equals(method)) {
                 String taskId = engine.startTask(new AutomationEngine.TaskRequest(
                         JsonRpc.text(params, "taskId"),

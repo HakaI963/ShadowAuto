@@ -85,6 +85,27 @@ final class AutomationEngine {
         logs.task(taskId, "automation stopped");
     }
 
+    synchronized void guideTask(String taskId, String text) {
+        TaskState task = tasks.get(taskId);
+        if (task == null) {
+            throw new IllegalArgumentException("unknown task: " + taskId);
+        }
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("guide text is empty");
+        }
+        if (trimmed.length() > 2000) {
+            trimmed = trimmed.substring(0, 2000);
+        }
+        synchronized (task.guides) {
+            task.guides.add(trimmed);
+            while (task.guides.size() > 5) {
+                task.guides.remove(0);
+            }
+        }
+        logs.task(taskId, "operator guide queued: " + trimmed);
+    }
+
     synchronized JsonObject statusJson() {
         JsonObject object = new JsonObject();
         boolean running = false;
@@ -489,6 +510,7 @@ final class AutomationEngine {
                 11. Search text candidate is the text to enter after opening a search field. If it is non-empty and the previous action clicked or focused a search/input field, call input_text with exactly that text; do not wait.
                 12. Do not call wait repeatedly on sparse or empty UI. After two waits, call get_ui_layout, get_screen_ocr, input_text, press_back, scroll_ui, or another concrete tool.
                 13. If a search was submitted and the UI dump has windows but inputs=[] and targets=[], the page may be visually rendered but accessibility-opaque. Do not press_back or restart the search only because nodes are missing. Prefer get_screen_ocr, get_ui_layout(full), wait once, or scroll_ui.
+                14. Extra user messages marked as operator updates override earlier plans. Follow the latest operator update from the next action on.
                 Goal: %s
                 Package: %s
                 Step: %d
@@ -504,6 +526,10 @@ final class AutomationEngine {
         JsonArray messages = new JsonArray();
         messages.add(AiClient.message("system", TOOL_SYSTEM_PROMPT));
         messages.add(AiClient.message("user", prompt));
+        String guide = drainGuides(task);
+        if (!guide.isEmpty()) {
+            messages.add(AiClient.message("user", "Operator update (follow it from the next action on):\n" + guide));
+        }
         JsonArray tools = ActionTools.tools();
         for (int observationCalls = 0; observationCalls <= MAX_OBSERVATION_TOOL_CALLS; observationCalls++) {
             AiClient.ToolResult result = ai.callTools(messages, tools);
@@ -618,8 +644,24 @@ final class AutomationEngine {
         return object;
     }
 
-    private static String rootCauseMessage(Throwable e) {
-        StringBuilder out = new StringBuilder();
+    private static String drainGuides(TaskState task) {
+        synchronized (task.guides) {
+            if (task.guides.isEmpty()) {
+                return "";
+            }
+            StringBuilder out = new StringBuilder();
+            for (String guide : task.guides) {
+                if (out.length() > 0) {
+                    out.append('\n');
+                }
+                out.append("- ").append(guide);
+            }
+            task.guides.clear();
+            return out.toString();
+        }
+    }
+
+    private static String rootCauseMessage(Throwable e) {        StringBuilder out = new StringBuilder();
         for (Throwable current = e; current != null; current = current.getCause()) {
             String message = current.getMessage();
             if (message == null || message.isEmpty()) {
@@ -993,6 +1035,7 @@ final class AutomationEngine {
     private static final class TaskState {
         final String taskId;
         final AtomicBoolean stop = new AtomicBoolean(false);
+        final List<String> guides = new ArrayList<>();
         volatile String state = "running";
         volatile Future<?> future;
         volatile VirtualDisplaySession display;

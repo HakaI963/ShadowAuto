@@ -22,6 +22,8 @@ final class AutomationTaskView {
         void onTaskStart(AutomationTaskView task);
 
         void onTaskStop(String taskId);
+
+        void onGuide(AutomationTaskView task);
     }
 
     private final Activity activity;
@@ -30,6 +32,7 @@ final class AutomationTaskView {
     private final String taskId;
     private final View view;
     private final EditText goal;
+    private final EditText guide;
     private final FrameLayout screenBox;
     private final TextureView screen;
     private final TextView log;
@@ -49,6 +52,7 @@ final class AutomationTaskView {
         this.listener = listener;
         view = activity.getLayoutInflater().inflate(R.layout.item_task, null, false);
         goal = view.findViewById(R.id.taskGoal);
+        guide = view.findViewById(R.id.guideInput);
         screenBox = view.findViewById(R.id.screenBox);
         screen = view.findViewById(R.id.screenTexture);
         screen.setOpaque(true);
@@ -56,10 +60,12 @@ final class AutomationTaskView {
         logScroll = view.findViewById(R.id.logScroll);
         run = view.findViewById(R.id.runButton);
         stop = view.findViewById(R.id.stopButton);
+        Button guideSend = view.findViewById(R.id.guideButton);
         screenDecoder = new H264VideoDecoder(screen, main);
-        UiUtils.clearButtonTint(run, stop);
+        UiUtils.clearButtonTint(run, stop, guideSend);
         screenBox.setOnClickListener(v -> showScreenDialog());
         run.setOnClickListener(v -> start());
+        guideSend.setOnClickListener(v -> listener.onGuide(this));
         stop.setOnClickListener(v -> {
             setRunning(false);
             listener.onTaskStop(taskId);
@@ -72,6 +78,14 @@ final class AutomationTaskView {
 
     String goalText() {
         return goal.getText().toString();
+    }
+
+    String guideText() {
+        return guide.getText().toString();
+    }
+
+    void clearGuide() {
+        guide.setText("");
     }
 
     View view() {
