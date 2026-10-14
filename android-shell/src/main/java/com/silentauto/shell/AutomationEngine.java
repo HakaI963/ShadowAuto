@@ -581,7 +581,7 @@ final class AutomationEngine {
             logs.logcat(task.taskId, "ocr_dump_end displayId=" + task.display.displayId);
         } catch (Throwable e) {
             object.addProperty("ocr_available", false);
-            object.addProperty("error", e.getMessage());
+            object.addProperty("error", rootCauseMessage(e));
             object.addProperty("ocr_root", PaddleOcrEngine.DEFAULT_ROOT);
             object.addProperty("ocr_diagnosis", ocrDiagnosis());
             object.addProperty("setup", "download ocr-runtime.zip from the GitHub release, unzip, then run: adb push ocr/. /data/local/tmp/shadowauto/ocr/ (must contain lib/arm64-v8a/*.so, models/ch_PP-OCRv2/*.nb, labels/ppocr_keys_v1.txt), then retry get_screen_ocr once");
@@ -638,12 +638,31 @@ final class AutomationEngine {
             object.addProperty("ocr_available", true);
         } catch (Throwable e) {
             object.addProperty("ocr_available", false);
-            object.addProperty("error", e.getMessage());
+            object.addProperty("error", rootCauseMessage(e));
         }
         return object;
     }
 
-    private PaddleOcrEngine getOcrEngine() throws Exception {        if (ocr == null) {
+    private static String rootCauseMessage(Throwable e) {
+        StringBuilder out = new StringBuilder();
+        for (Throwable current = e; current != null; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message == null || message.isEmpty()) {
+                message = current.getClass().getSimpleName();
+            }
+            if (out.length() > 0) {
+                out.append(" caused by ");
+            }
+            out.append(message);
+            if (out.length() > 800) {
+                break;
+            }
+        }
+        return out.length() == 0 ? "unknown error" : out.toString();
+    }
+
+    private PaddleOcrEngine getOcrEngine() throws Exception {
+        if (ocr == null) {
             logs.logcat(null, "ocr_engine_init_begin");
             ocr = new PaddleOcrEngine();
             ocr.init();

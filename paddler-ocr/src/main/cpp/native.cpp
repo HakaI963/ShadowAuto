@@ -35,19 +35,36 @@ static jlong native_init(JNIEnv *env, jstring j_det_model_path,
                          jstring j_rec_model_path, jstring j_cls_model_path,
                          jint j_use_opencl, jint j_thread_num,
                          jstring j_cpu_mode) {
-  std::string det_model_path = jstring_to_cpp_string(env, j_det_model_path);
-  std::string rec_model_path = jstring_to_cpp_string(env, j_rec_model_path);
-  std::string cls_model_path = jstring_to_cpp_string(env, j_cls_model_path);
-  int thread_num = j_thread_num;
-  std::string cpu_mode = jstring_to_cpp_string(env, j_cpu_mode);
-  ppredictor::OCR_Config conf;
-  conf.use_opencl = j_use_opencl;
-  conf.thread_num = thread_num;
-  conf.mode = str_to_cpu_mode(cpu_mode);
-  ppredictor::OCR_PPredictor *orc_predictor =
-      new ppredictor::OCR_PPredictor{conf};
-  orc_predictor->init_from_file(det_model_path, rec_model_path, cls_model_path);
-  return reinterpret_cast<jlong>(orc_predictor);
+  try {
+    std::string det_model_path = jstring_to_cpp_string(env, j_det_model_path);
+    std::string rec_model_path = jstring_to_cpp_string(env, j_rec_model_path);
+    std::string cls_model_path = jstring_to_cpp_string(env, j_cls_model_path);
+    int thread_num = j_thread_num;
+    std::string cpu_mode = jstring_to_cpp_string(env, j_cpu_mode);
+    LOGI("native init det=%s rec=%s cls=%s threads=%d", det_model_path.c_str(),
+         rec_model_path.c_str(), cls_model_path.c_str(), thread_num);
+    ppredictor::OCR_Config conf;
+    conf.use_opencl = j_use_opencl;
+    conf.thread_num = thread_num;
+    conf.mode = str_to_cpu_mode(cpu_mode);
+    ppredictor::OCR_PPredictor *orc_predictor =
+        new ppredictor::OCR_PPredictor{conf};
+    try {
+      orc_predictor->init_from_file(det_model_path, rec_model_path,
+                                    cls_model_path);
+    } catch (...) {
+      delete orc_predictor;
+      throw;
+    }
+    LOGI("native init done");
+    return reinterpret_cast<jlong>(orc_predictor);
+  } catch (const std::exception &e) {
+    LOGE("native init failed: %s", e.what());
+    return 0;
+  } catch (...) {
+    LOGE("native init failed with unknown exception");
+    return 0;
+  }
 }
 
 /**
@@ -95,10 +112,11 @@ static jfloatArray native_forward(JNIEnv *env, jlong java_pointer,
   }
 
   cv::Mat origin = bitmap_to_cv_mat(env, original_image);
-  if (origin.size == 0) {
+  if (origin.empty()) {
     LOGE("origin bitmap cannot convert to CV Mat");
     return cpp_array_to_jfloatarray(env, nullptr, 0);
   }
+  LOGI("native forward image %dx%d", origin.cols, origin.rows);
 
   int max_size_len = j_max_size_len;
   int run_det = j_run_det;

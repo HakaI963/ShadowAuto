@@ -32,7 +32,7 @@ public final class ShizukuServerManager {
     public static final int DESTROY_TRANSACTION = 16777115;
     private static final String SERVICE_CLASS = "com.silentauto.shell.ShellUserService";
     private static final String SERVICE_TAG = "shadowauto-shell";
-    private static final int SERVICE_VERSION = 2;
+    private static final int SERVICE_VERSION = 3;
     private static final AtomicInteger IDS = new AtomicInteger(1000);
 
     public interface Callback {

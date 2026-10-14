@@ -14,16 +14,40 @@ final class PaddleOcrNative {
 
     PaddleOcrNative(File libDir, Config config) {
         loadLibrary(libDir);
-        nativePointer = init(
-                config.detModelPath,
-                config.recModelPath,
-                config.clsModelPath,
-                config.useOpenCl ? 1 : 0,
-                config.cpuThreadNum,
-                config.cpuPowerMode
-        );
-        if (nativePointer == 0) {
-            throw new IllegalStateException("Paddle OCR native init failed");
+        long pointer;
+        try {
+            pointer = init(
+                    config.detModelPath,
+                    config.recModelPath,
+                    config.clsModelPath,
+                    config.useOpenCl ? 1 : 0,
+                    config.cpuThreadNum,
+                    config.cpuPowerMode
+            );
+        } catch (Throwable e) {
+            throw new IllegalStateException("Paddle OCR native init crashed: "
+                    + describe(config), e);
+        }
+        if (pointer == 0) {
+            throw new IllegalStateException("Paddle OCR native init failed: "
+                    + describe(config)
+                    + " (see logcat tag OCR_NDK for the native reason)");
+        }
+        nativePointer = pointer;
+    }
+
+    private static String describe(Config config) {
+        return "det=" + fileInfo(config.detModelPath)
+                + " rec=" + fileInfo(config.recModelPath)
+                + " cls=" + fileInfo(config.clsModelPath);
+    }
+
+    private static String fileInfo(String path) {
+        try {
+            File file = new File(path);
+            return path + "(exists=" + file.isFile() + ",size=" + file.length() + ")";
+        } catch (Throwable ignored) {
+            return String.valueOf(path);
         }
     }
 

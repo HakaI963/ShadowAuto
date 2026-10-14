@@ -49,10 +49,23 @@ public final class PaddleOcrEngine implements AutoCloseable {
         if (nativeOcr == null) {
             throw new IllegalStateException("Paddle OCR is not initialized");
         }
+        if (bitmap == null || bitmap.isRecycled() || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) {
+            throw new IllegalArgumentException("Paddle OCR got an empty bitmap");
+        }
         Bitmap input = bitmap;
         boolean recycleInput = false;
         if (bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
-            input = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+            try {
+                input = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+            } catch (Throwable e) {
+                throw new IllegalStateException(
+                        "Paddle OCR cannot convert bitmap config " + bitmap.getConfig()
+                                + " (" + bitmap.getWidth() + "x" + bitmap.getHeight() + ")", e);
+            }
+            if (input == null) {
+                throw new IllegalStateException(
+                        "Paddle OCR bitmap copy returned null for config " + bitmap.getConfig());
+            }
             recycleInput = true;
         }
         try {

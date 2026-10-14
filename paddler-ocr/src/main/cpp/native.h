@@ -127,14 +127,26 @@ inline cv::Mat bitmap_to_cv_mat(JNIEnv *env, jobject bitmap) {
     return cv::Mat{};
   }
   unsigned char *srcData = NULL;
-  AndroidBitmap_lockPixels(env, bitmap, (void **)&srcData);
+  if (AndroidBitmap_lockPixels(env, bitmap, (void **)&srcData) !=
+          ANDROID_BITMAP_RESULT_SUCCESS ||
+      srcData == NULL) {
+    LOGE("AndroidBitmap_lockPixels failed");
+    return cv::Mat{};
+  }
   cv::Mat mat = cv::Mat::zeros(info.height, info.width, CV_8UC4);
   if (!mat.data) {
     AndroidBitmap_unlockPixels(env, bitmap);
     return cv::Mat{};
   }
-  size_t copy_size = (size_t)info.height * info.width * 4;
-  memcpy(mat.data, srcData, copy_size);
+  // Row-by-row copy: bitmap stride (bytes per row) may exceed width*4
+  // (e.g. hardware/screenshot bitmaps). A flat memcpy would shear the image
+  // and the detector would find no text.
+  const size_t row_bytes = (size_t)info.width * 4;
+  unsigned char *dst = mat.data;
+  for (uint32_t y = 0; y < info.height; y++) {
+    memcpy(dst + (size_t)y * row_bytes, srcData + (size_t)y * info.stride,
+           row_bytes);
+  }
   AndroidBitmap_unlockPixels(env, bitmap);
   cv::cvtColor(mat, mat, cv::COLOR_RGBA2BGR);
   /**
