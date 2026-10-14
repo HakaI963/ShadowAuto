@@ -40,6 +40,18 @@
     <string name="shizuku_missing">Shizuku not running: start Shizuku, then tap Start server</string>
     <string name="shizuku_denied">Shizuku permission needed: tap Start server to grant</string>
     <string name="shizuku_requesting">Requesting Shizuku permission…</string>
+    <string name="server_setup">Setup</string>
+    <string name="server_open">Open Shizuku</string>
+    <string name="server_grant">Grant</string>
+    <string name="state_no_manager">Shizuku app not installed — tap Setup to install it</string>
+    <string name="state_not_running">Shizuku installed but not running — tap Open Shizuku and start it</string>
+    <string name="state_denied_temp">Shizuku permission needed — tap Grant</string>
+    <string name="state_denied_perm">Permission blocked — open Shizuku manager and allow this app</string>
+    <string name="perm_sent">Permission request sent — confirm the prompt in Shizuku</string>
+    <string name="perm_failed">Permission request failed: %1$s</string>
+    <string name="start_shizuku_first">Shizuku opened — start the service there, then return here</string>
+    <string name="open_failed">Cannot open anything — install/start Shizuku manually</string>
+    <string name="action_timeout">Action timed out — tap again to retry</string>
     <string name="ocr_ready">OCR ready</string>
     <string name="ocr_missing">OCR runtime missing</string>
     <string name="ocr_broken">OCR error: %1$s</string>
@@ -60,6 +72,7 @@
     <string name="keep_alive_text">Keeping the controller available for automation tasks</string>
     <string name="help_title">Help</string>
     <string name="help_usage_title">How to use</string>
+    <string name="help_usage_shizuku">Tap the top status button first: install and start Shizuku when asked, grant permission, then start the server. The dots show live server/OCR state.</string>
     <string name="help_usage_config">On first launch, enter API Key, URL, and model, then test the connection.</string>
     <string name="help_usage_run">Enter a goal on a task page and tap Run to start automation.</string>
     <string name="help_usage_live">After starting, virtual screen casting, Stop, and progress logs will appear.</string>

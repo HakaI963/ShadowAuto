@@ -58,6 +58,10 @@
 
                 <TextView
                     style="@style/HelpItemText"
+                    android:text="@string/help_usage_shizuku" />
+
+                <TextView
+                    style="@style/HelpItemText"
                     android:text="@string/help_usage_run" />
 
                 <TextView

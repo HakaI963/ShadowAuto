@@ -30,6 +30,8 @@ public final class ShizukuServerManager {
     public static final int PORT = 43110;
     public static final int PERMISSION_CODE = 10001;
     public static final int DESTROY_TRANSACTION = 16777115;
+    public static final String MANAGER_PACKAGE = "moe.shizuku.privileged.api";
+    public static final String MANAGER_DOWNLOAD = "https://shizuku.rikka.app/download/";
     private static final String SERVICE_CLASS = "com.silentauto.shell.ShellUserService";
     private static final String SERVICE_TAG = "shadowauto-shell";
     private static final int SERVICE_VERSION = 3;
@@ -80,13 +82,122 @@ public final class ShizukuServerManager {
     }
 
     public static void requestPermission() {
+        String reason = requestPermissionReason();
+        if (reason != null) {
+            throw new IllegalStateException(reason);
+        }
+    }
+
+    /**
+     * Tries to send the Shizuku permission request.
+     *
+     * @return null when the request was handed to Shizuku (watch for the
+     * system prompt / manager result); otherwise the concrete reason why no
+     * prompt can appear, to show in the UI instead of failing silently.
+     */
+    public static String requestPermissionReason() {
         try {
-            if (Shizuku.shouldShowRequestPermissionRationale()) {
-                return;
+            if (!isBinderAlive()) {
+                return "Shizuku service is not running";
+            }
+            if (hasPermission()) {
+                return null;
+            }
+            if (shouldShowRationale()) {
+                return "blocked: allowed once with 'don't ask again' - open Shizuku manager and allow this app";
             }
             Shizuku.requestPermission(PERMISSION_CODE);
-        } catch (Throwable ignored) {
+            return null;
+        } catch (Throwable e) {
+            String message = e.getMessage();
+            return message == null || message.isEmpty()
+                    ? e.getClass().getSimpleName() : message;
         }
+    }
+
+    public static boolean shouldShowRationale() {
+        try {
+            return Shizuku.shouldShowRequestPermissionRationale();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean isManagerInstalled(Context context) {
+        try {
+            android.content.pm.PackageManager pm = context.getPackageManager();
+            pm.getPackageInfo(MANAGER_PACKAGE, 0);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean openManager(Context context) {
+        try {
+            android.content.Intent intent =
+                    context.getPackageManager().getLaunchIntentForPackage(MANAGER_PACKAGE);
+            if (intent == null) {
+                return false;
+            }
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static boolean openDownloadPage(Context context) {
+        try {
+            android.content.Intent intent = new android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(MANAGER_DOWNLOAD));
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** Point-in-time snapshot of everything the status UI needs. Call off the UI thread. */
+    public static final class State {
+        public boolean managerInstalled;
+        public boolean binderAlive;
+        public boolean permissionGranted;
+        public boolean permanentlyDenied;
+        public boolean serverRunning;
+    }
+
+    public static State readState(Context context) {
+        State state = new State();
+        try {
+            state.managerInstalled = isManagerInstalled(context);
+        } catch (Throwable ignored) {
+            state.managerInstalled = false;
+        }
+        try {
+            state.binderAlive = isBinderAlive();
+        } catch (Throwable ignored) {
+            state.binderAlive = false;
+        }
+        try {
+            state.permissionGranted = state.binderAlive && hasPermission();
+        } catch (Throwable ignored) {
+            state.permissionGranted = false;
+        }
+        try {
+            state.permanentlyDenied = !state.permissionGranted && shouldShowRationale();
+        } catch (Throwable ignored) {
+            state.permanentlyDenied = false;
+        }
+        try {
+            state.serverRunning = isServerRunning();
+        } catch (Throwable ignored) {
+            state.serverRunning = false;
+        }
+        return state;
     }
 
     public static boolean isServerRunning() {
