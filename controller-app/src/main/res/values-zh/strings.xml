@@ -44,7 +44,7 @@
     <string name="server_open">打开 Shizuku</string>
     <string name="server_grant">授权</string>
     <string name="state_no_manager">未安装 Shizuku，点击设置去安装</string>
-    <string name="state_not_running">Shizuku 已安装但未运行，点击打开并启动服务</string>
+    <string name="state_not_running">Shizuku 未连接——请打开它并启动服务，然后彻底关闭重开本应用</string>
     <string name="state_denied_temp">需要 Shizuku 权限，点击授权</string>
     <string name="state_denied_perm">权限被屏蔽，请在 Shizuku 管理器中允许本应用</string>
     <string name="perm_sent">已发送权限请求，请在 Shizuku 中确认</string>
@@ -72,7 +72,7 @@
     <string name="keep_alive_text">正在保持控制端可用于自动化任务</string>
     <string name="help_title">使用帮助</string>
     <string name="help_usage_title">如何使用</string>
-    <string name="help_usage_shizuku">先点顶部状态按钮：按提示安装并启动 Shizuku、授权后再启动服务。圆点实时显示服务/OCR 状态。</string>
+    <string name="help_usage_shizuku">顺序很重要：先启动 Shizuku 服务，再打开本应用（若无授权弹窗，请彻底关闭重开）。再点顶部状态按钮授权并启动服务。圆点实时显示服务/OCR 状态。</string>
     <string name="help_usage_config">首次进入先填写 API Key、URL 和模型，并测试连接。</string>
     <string name="help_usage_run">在任务页输入目标，点击执行后开始自动化。</string>
     <string name="help_usage_live">开始后会显示虚拟投屏、停止按钮和进度日志。</string>

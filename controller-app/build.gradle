@@ -15,8 +15,8 @@ android {
         applicationId = "com.silentauto.controller"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5-unified"
+        versionCode = 6
+        versionName = "0.6-unified"
     }
 
     buildTypes {

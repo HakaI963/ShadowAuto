@@ -44,7 +44,7 @@
     <string name="server_open">Open Shizuku</string>
     <string name="server_grant">Grant</string>
     <string name="state_no_manager">Shizuku app not installed — tap Setup to install it</string>
-    <string name="state_not_running">Shizuku installed but not running — tap Open Shizuku and start it</string>
+    <string name="state_not_running">Shizuku not attached — open it, start the service, then force-close and reopen this app</string>
     <string name="state_denied_temp">Shizuku permission needed — tap Grant</string>
     <string name="state_denied_perm">Permission blocked — open Shizuku manager and allow this app</string>
     <string name="perm_sent">Permission request sent — confirm the prompt in Shizuku</string>
@@ -72,7 +72,7 @@
     <string name="keep_alive_text">Keeping the controller available for automation tasks</string>
     <string name="help_title">Help</string>
     <string name="help_usage_title">How to use</string>
-    <string name="help_usage_shizuku">Tap the top status button first: install and start Shizuku when asked, grant permission, then start the server. The dots show live server/OCR state.</string>
+    <string name="help_usage_shizuku">Order matters: start the Shizuku service FIRST, then open this app (if Shizuku shows no prompt, force-close and reopen). Then tap the top status button to grant permission and start the server. The dots show live server/OCR state.</string>
     <string name="help_usage_config">On first launch, enter API Key, URL, and model, then test the connection.</string>
     <string name="help_usage_run">Enter a goal on a task page and tap Run to start automation.</string>
     <string name="help_usage_live">After starting, virtual screen casting, Stop, and progress logs will appear.</string>
