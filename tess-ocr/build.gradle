@@ -13,6 +13,12 @@ android {
         minSdk = 29
     }
 
+    sourceSets {
+        main {
+            jniLibs.srcDirs += 'build/generated/jniLibs'
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -23,6 +29,20 @@ dependencies {
     // Tesseract 5.5 + Leptonica, prebuilt arm64/x86 .so via JitPack (cached
     // 4.8.0 build). No NDK/CMake needed on our side.
     implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0"
+}
+
+// AGP does not auto-package libc++_shared.so when the project has no native
+// build of its own, but tess's prebuilt .so files link against it. Copy it
+// from the NDK into packaged jniLibs so it lands in every consuming APK
+// (and therefore in nativeLibraryDir, from which OCR deploys it).
+tasks.register("copyLibcxxShared", Copy) {
+    from(new File(android.ndkDirectory,
+            "toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"))
+    into("build/generated/jniLibs/arm64-v8a")
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("copyLibcxxShared")
 }
 
 def tessdataFiles = [
