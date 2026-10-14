@@ -49,6 +49,15 @@ jobs:
 
       - name: Locate signing tools
         run: |
+          # NOTE: intentional `set +o pipefail` — ls-based probes below must
+          # degrade to clean FATALs, never silent death via pipefail+errexit.
+          set +o pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          [ -n "$SDK_ROOT" ] && [ -d "$SDK_ROOT/build-tools" ] || SDK_ROOT="$HOME/Android/Sdk"
+          [ -d "$SDK_ROOT/build-tools" ] || SDK_ROOT="/usr/local/lib/android/sdk"
+          echo "SDK_ROOT=$SDK_ROOT (ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-unset} ANDROID_HOME=${ANDROID_HOME:-unset})"
+          [ -d "$SDK_ROOT/build-tools" ] || { echo "FATAL: no build-tools under $SDK_ROOT"; ls "$SDK_ROOT" 2>/dev/null; exit 1; }
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           df -h "$GITHUB_WORKSPACE" | tail -2
           keytool -genkeypair -v \
             -keystore release.keystore \
@@ -58,13 +67,15 @@ jobs:
             -dname "CN=ShadowAuto, O=ShadowAuto, L=Unknown, ST=Unknown, C=US"
           mkdir -p signed-apks
           echo "build-tools versions:"
-          ls "$ANDROID_SDK_ROOT/build-tools"
-          echo "APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | tail -n 1)"
-          echo "ZIPALIGN=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/zipalign | tail -n 1)"
-          ls $ANDROID_SDK_ROOT/build-tools/*/apksigner | tail -n 1 > .apksigner_path
-          ls $ANDROID_SDK_ROOT/build-tools/*/zipalign | tail -n 1 > .zipalign_path
-          echo "chosen apksigner: $(cat .apksigner_path)"
-          echo "chosen zipalign: $(cat .zipalign_path)"
+          ls "$SDK_ROOT/build-tools"
+          APKSIGNER="$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | tail -n 1)"
+          ZIPALIGN="$(ls "$SDK_ROOT"/build-tools/*/zipalign 2>/dev/null | tail -n 1)"
+          [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ] || { echo "FATAL: apksigner missing under $SDK_ROOT/build-tools"; exit 1; }
+          [ -n "$ZIPALIGN" ] && [ -x "$ZIPALIGN" ] || { echo "FATAL: zipalign missing under $SDK_ROOT/build-tools"; exit 1; }
+          echo "$APKSIGNER" > .apksigner_path
+          echo "$ZIPALIGN" > .zipalign_path
+          echo "chosen apksigner: $APKSIGNER"
+          echo "chosen zipalign: $ZIPALIGN"
           echo "=== release APKs ==="
           find . -path '*/build/outputs/apk/release/*.apk' -exec ls -lh {} \;
           COUNT="$(find . -path '*/build/outputs/apk/release/*-release-unsigned.apk' | wc -l)"
