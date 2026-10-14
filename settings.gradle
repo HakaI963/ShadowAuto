@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Local vendored AARs (Tesseract4Android). Group is ignored by flatDir.
+        flatDir {
+            dirs("tess-ocr/libs")
+        }
     }
 }
 

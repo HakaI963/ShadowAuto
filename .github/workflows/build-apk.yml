@@ -167,6 +167,8 @@ jobs:
             df -h "$GITHUB_WORKSPACE" 2>/dev/null | tail -1
             echo "--- tessdata ---"
             ls -lh tess-ocr/TessData/tessdata 2>/dev/null | head -5
+            echo "--- retry tess-ocr compile to capture error ---"
+            ./gradlew :tess-ocr:compileReleaseJavaWithJavac --no-daemon --console=plain 2>&1 | tail -40
           } > /tmp/ci-diag.txt 2>&1 || true
           git config user.name "ci-debug" || true
           git config user.email "ci-debug@local" || true
