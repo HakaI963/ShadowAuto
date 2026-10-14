@@ -240,7 +240,7 @@ The result explicitly marks the coordinate space:
 
 Some apps do not expose useful accessibility nodes. Self-rendered pages, complex e-commerce views, maps, and security pages can appear visually rich while the UI tree is empty or incomplete.
 
-For those cases ShadowAuto exposes a `get_screen_ocr` tool. The shell captures the current virtual display frame, runs Paddle Lite OCR, and returns text, confidence, and bounding boxes.
+For those cases ShadowAuto exposes a `get_screen_ocr` tool. The shell captures the current virtual display frame, runs Tesseract OCR, and returns text, confidence, and bounding boxes.
 
 Frame capture uses the virtual display itself. It temporarily switches the VirtualDisplay surface to an `ImageReader`, captures the latest image, and restores the video surface:
 
@@ -491,8 +491,8 @@ For debugging, layout dumps and OCR results are also written to logcat so a deve
 
 - `silent-shell.apk`
 - `controller-app.apk`
-- Paddle Lite OCR native libraries
-- Paddle OCR models and label files
+- Tesseract OCR native libraries
+- Tesseract traineddata (chi_sim+eng)
 
 ### 2. Start the shell process
 

@@ -249,7 +249,7 @@ dump 返回两种模式：
 
 很多页面并不会暴露完整无障碍节点，例如自绘页面、复杂列表、部分电商页面、地图、支付安全页面等。此时 UI dump 可能为空，但屏幕上明明有文字。
 
-ShadowAuto 提供 `get_screen_ocr` tool。shell 会从虚拟屏抓取当前画面，调用 Paddle Lite OCR，返回文本、置信度和坐标框。
+ShadowAuto 提供 `get_screen_ocr` tool。shell 会从虚拟屏抓取当前画面，调用 Tesseract OCR，返回文本、置信度和坐标框。
 
 截图路径不是从主屏截图，而是临时把 VirtualDisplay 的 Surface 切到 `ImageReader`：
 
@@ -509,8 +509,8 @@ adb logcat -v time -s ShadowAutoShell
 
 - `silent-shell.apk`
 - `controller-app.apk`
-- Paddle Lite OCR native library
-- Paddle OCR 模型和 label 文件
+- Tesseract OCR native library
+- Tesseract 训练数据（chi_sim+eng）
 
 ### 2. 启动 shell
 

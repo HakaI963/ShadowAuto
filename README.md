@@ -13,7 +13,7 @@ The Chinese product name is **隐控**.
 - Background silent automation: target apps run inside a VirtualDisplay without occupying the physical screen.
 - AI tool-call control: the model repeatedly chooses tools such as tap, input, scroll, back, search, wait, and finish.
 - UI node reading: UiAutomation returns windows, node trees, editable fields, and actionable targets for the target display.
-- OCR visual fallback: Paddle Lite OCR reads visible text and bounding boxes on self-rendered or accessibility-opaque pages.
+- OCR visual fallback: Tesseract OCR reads visible text and bounding boxes on self-rendered or accessibility-opaque pages.
 - Display-targeted input injection: touch, key, clipboard, and IME operations are injected into the virtual display, not the main display.
 - Real-time virtual screen streaming: the VirtualDisplay is streamed to the controller app as H.264 video.
 - Parallel tasks: the controller app can create multiple independent task pages, each with its own goal, screen stream, and progress log.
@@ -152,25 +152,25 @@ ShadowAuto uses a shell-owned ReAct-style automation loop:
 4. The shell asks the AI model to reason about the goal and use tools.
 5. Tool calls perform real UI operations: dump UI layout, tap targets, tap coordinates, focus inputs, input text, select all, delete, paste clipboard, scroll, drag, press Back, press Enter/Search, wait, or finish.
 6. UiAutomation observes the UI node tree for the virtual display. The shell can return a compact actionable layout or a full layout dump.
-7. When UI nodes are empty, wrong, or insufficient, the AI can call `get_screen_ocr`; the shell uses Paddle Lite OCR to return visible text, confidence, and bounding boxes.
+7. When UI nodes are empty, wrong, or insufficient, the AI can call `get_screen_ocr`; the shell uses Tesseract OCR to return visible text, confidence, and bounding boxes.
 8. InputManager injects touch and key events into the target display instead of the main phone display.
 9. The VirtualDisplay renders into a MediaCodec input surface. The shell streams H.264 config and samples to the Android app, which decodes them into a TextureView; progress logs are sent through the same local JSON-RPC event channel.
 10. The loop repeats until the model calls `finish`, the user stops the task, or an error occurs.
 
 This architecture keeps the automated app off the main display while still allowing the user to monitor progress from the controller app.
 
-## Paddle Lite Offline OCR
+## Tesseract Offline OCR
 
-The `paddler-ocr` module contains the PaddleOCR Android integration for visual fallback on self-rendered or accessibility-opaque pages. The shell process calls this module directly; the controller app does not contain OCR code. OCR is enabled by default; build or copy its runtime files with:
+The `tess-ocr` module contains the Tesseract Android integration (tess-two from Maven Central, no NDK build) for visual fallback on self-rendered or accessibility-opaque pages. The shell process calls this module directly; the unified controller app bundles the same code plus traineddata assets and auto-deploys them on launch. OCR is enabled by default; download its traineddata files with:
 
 ```sh
-./gradlew :paddler-ocr:preparePaddleLiteOcr
-./gradlew :android-shell:copyPaddleLiteOcrRuntime
+./gradlew :tess-ocr:prepareTesseractOcr
+./gradlew :android-shell:copyTessOcrRuntime
 ```
 
-The prepare task downloads PaddleLite v2.10, OpenCV Android SDK, the PP-OCRv2 Chinese mobile models, and labels. Generated files live under `paddler-ocr/PaddleLite`, `paddler-ocr/OpenCV`, and `paddler-ocr/PaddleOcrAssets`; they are ignored by git.
+The prepare task downloads the `chi_sim` + `eng` traineddata files. Generated files live under `tess-ocr/TessData`; they are ignored by git.
 
-The Java entry point is `com.silentauto.paddlerocr.PaddleOcrEngine`. After `init()`, call `recognize(Bitmap)` to get text, confidence, and bounding boxes. Runtime files are copied to `android-shell/build/ocr-runtime` and uploaded to `/data/local/tmp/shadowauto/ocr` by the web launcher.
+The Java entry point is `com.silentauto.tessocr.TessOcrEngine`. After `init()`, call `recognize(Bitmap)` to get text, confidence, and bounding boxes. Runtime files are copied to `android-shell/build/ocr-runtime` and uploaded to `/data/local/tmp/shadowauto/ocr` by the web launcher.
 
 ## JSON-RPC Overview
 

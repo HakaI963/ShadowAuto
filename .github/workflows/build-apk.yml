@@ -23,32 +23,29 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up Android SDK, NDK and CMake
+      - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platforms;android-36 build-tools;36.0.0 ndk;23.1.7779620 cmake;3.22.1
+          packages: platforms;android-36 build-tools;36.0.0 ndk;23.1.7779620
 
       - name: Cache Gradle
         uses: gradle/gradle-build-action@v3
 
-      - name: Cache Paddle Lite OCR assets
+      - name: Cache Tesseract OCR traineddata
         uses: actions/cache@v4
         with:
           path: |
-            **/paddler-ocr/PaddleLite
-            **/paddler-ocr/OpenCV
-            **/paddler-ocr/PaddleOcrAssets
-            **/paddler-ocr/cache
-          key: paddle-ocr-${{ runner.os }}-${{ hashFiles('**/paddler-ocr/build.gradle') }}
+            **/tess-ocr/TessData
+          key: tess-ocr-${{ runner.os }}-${{ hashFiles('**/tess-ocr/build.gradle') }}
           restore-keys: |
-            paddle-ocr-${{ runner.os }}-
+            tess-ocr-${{ runner.os }}-
 
       - name: Build release APKs (OCR enabled)
         env:
-          ORG_GRADLE_PROJECT_enablePaddleLiteOcr: "true"
+          ORG_GRADLE_PROJECT_enableOcr: "true"
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease -PenablePaddleLiteOcr=true --no-daemon --stacktrace
+          ./gradlew assembleRelease -PenableOcr=true --no-daemon --stacktrace
 
       - name: Sign release APKs
         run: |
@@ -74,7 +71,7 @@ jobs:
 
       - name: Prepare and package OCR runtime
         run: |
-          ./gradlew :android-shell:syncWebLauncherArtifacts -PenablePaddleLiteOcr=true --no-daemon
+          ./gradlew :android-shell:syncWebLauncherArtifacts -PenableOcr=true --no-daemon
           cd web-launcher/static
           zip -r "$GITHUB_WORKSPACE/ocr-runtime.zip" ocr
           cd "$GITHUB_WORKSPACE"

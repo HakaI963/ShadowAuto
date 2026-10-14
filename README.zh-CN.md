@@ -11,7 +11,7 @@ ShadowAuto 的重点不是简单脚本点击，而是让 AI 具备类似手机�
 - 后台静默自动化：目标 App 运行在 VirtualDisplay 中，不占用实体主屏。
 - AI tool call 操作手机：模型根据用户目标持续调用点击、输入、滚动、返回、搜索、等待和完成等工具。
 - UI 节点读取：通过 UiAutomation 获取指定 display 的完整窗口、节点树、输入框和可点击目标。
-- OCR 视觉兜底：通过 Paddle Lite OCR 识别屏幕文字和坐标，处理无节点、自绘或无障碍不完整页面。
+- OCR 视觉兜底：通过 Tesseract OCR 识别屏幕文字和坐标，处理无节点、自绘或无障碍不完整页面。
 - 指定 display 输入注入：触摸、按键、剪贴板和 IME 操作都落到虚拟屏，而不是主屏。
 - 实时虚拟投屏：VirtualDisplay 通过 H.264 视频流回传到控制端 App，方便观察后台执行状态。
 - 多任务并行：控制端可以创建多个独立任务页，每个任务维护自己的目标、投屏和进度日志。
@@ -150,25 +150,25 @@ adb shell "kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data
 4. shell 请求大模型，让模型根据目标和当前 UI 状态进行推理，并通过 tool call 选择下一步动作。
 5. tool call 会执行真实 UI 操作：获取布局、点击目标节点、点击坐标、聚焦输入框、输入文本、全选、删除、粘贴、滚动、拖拽、返回、回车/搜索、等待或完成任务。
 6. UiAutomation 负责读取虚拟显示屏上的 UI 节点树。shell 可以返回简化后的可操作布局，也可以返回完整布局。
-7. 当 UI 节点为空、错误或不足以决策时，AI 可以调用 `get_screen_ocr`，shell 通过 Paddle Lite OCR 读取屏幕文字、置信度和坐标框。
+7. 当 UI 节点为空、错误或不足以决策时，AI 可以调用 `get_screen_ocr`，shell 通过 Tesseract OCR 读取屏幕文字、置信度和坐标框。
 8. InputManager 把触摸和按键事件注入到目标 display，而不是手机主屏幕。
 9. VirtualDisplay 直接渲染到 MediaCodec 输入 Surface。shell 推送 H.264 配置和 sample，Android App 解码到 TextureView；进度日志通过同一本机 JSON-RPC 事件通道发送。
 10. 这个循环会持续执行，直到模型调用 `finish`、用户停止任务，或发生错误。
 
 这种架构可以让目标应用在虚拟屏里运行，用户则在控制端 App 中观察进度，不需要把自动化操作暴露在主屏幕上。
 
-## Paddle Lite 离线 OCR
+## Tesseract 离线 OCR
 
-`paddler-ocr` 模块负责 PaddleOCR Android 集成，用于对不可访问、自绘页面做视觉兜底。shell 进程会直接调用该模块，controller-app 不再包含 OCR 代码。OCR 默认开启；构建或复制运行时文件执行：
+`tess-ocr` 模块负责 Tesseract Android 集成（Maven Central 的 tess-two，无需 NDK 构建），用于对不可访问、自绘页面做视觉兜底。shell 进程会直接调用该模块，统一版 controller-app 也打包了同样的代码和训练数据并在启动时自动部署。OCR 默认开启；下载训练数据执行：
 
 ```sh
-./gradlew :paddler-ocr:preparePaddleLiteOcr
-./gradlew :android-shell:copyPaddleLiteOcrRuntime
+./gradlew :tess-ocr:prepareTesseractOcr
+./gradlew :android-shell:copyTessOcrRuntime
 ```
 
-该任务会下载 PaddleLite v2.10、OpenCV Android SDK、PP-OCRv2 中文移动端模型和字典。生成文件位于 `paddler-ocr/PaddleLite`、`paddler-ocr/OpenCV`、`paddler-ocr/PaddleOcrAssets`，这些目录不会提交到 git。
+该任务会下载 `chi_sim` + `eng` 训练数据。生成文件位于 `tess-ocr/TessData`，该目录不会提交到 git。
 
-Java 入口是 `com.silentauto.paddlerocr.PaddleOcrEngine`，调用 `init()` 后可通过 `recognize(Bitmap)` 获取文本、置信度和坐标框。运行时文件会复制到 `android-shell/build/ocr-runtime`，并由浏览器启动器上传到 `/data/local/tmp/shadowauto/ocr`。
+Java 入口是 `com.silentauto.tessocr.TessOcrEngine`，调用 `init()` 后可通过 `recognize(Bitmap)` 获取文本、置信度和坐标框。运行时文件会复制到 `android-shell/build/ocr-runtime`，并由浏览器启动器上传到 `/data/local/tmp/shadowauto/ocr`。
 
 ## JSON-RPC 概览
 

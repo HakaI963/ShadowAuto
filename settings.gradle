@@ -16,6 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "ShadowAutoSuite"
 include ":android-stubs"
-include ":paddler-ocr"
+include ":tess-ocr"
 include ":android-shell"
 include ":controller-app"

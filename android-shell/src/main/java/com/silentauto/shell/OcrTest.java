@@ -4,8 +4,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 
-import com.silentauto.paddlerocr.PaddleOcrEngine;
-import com.silentauto.paddlerocr.PaddleOcrResult;
+import com.silentauto.tessocr.TessOcrEngine;
+import com.silentauto.tessocr.TessOcrResult;
 
 import java.util.List;
 
@@ -19,17 +19,18 @@ final class OcrTest {
         Bitmap bitmap = null;
         try {
             logs.logcat(null, "ocr_test_begin");
-            logs.logcat(null, "ocr_native_available=" + PaddleOcrEngine.isNativeAvailable());
+            logs.logcat(null, "ocr_native_available=" + TessOcrEngine.isNativeAvailable());
+            logs.logcat(null, "ocr_diagnosis=" + TessOcrEngine.diagnose());
             bitmap = BitmapFactory.decodeFile(TEST_IMAGE);
             if (bitmap == null) {
                 throw new IllegalStateException("Missing OCR test image: " + TEST_IMAGE);
             }
             logs.logcat(null, "ocr_test_image=" + TEST_IMAGE + " size=" + bitmap.getWidth() + "x" + bitmap.getHeight());
-            try (PaddleOcrEngine engine = new PaddleOcrEngine()) {
+            try (TessOcrEngine engine = new TessOcrEngine()) {
                 logs.logcat(null, "ocr_init_begin");
                 engine.init();
                 logs.logcat(null, "ocr_init_done");
-                List<PaddleOcrResult> results = engine.recognize(bitmap);
+                List<TessOcrResult> results = engine.recognize(bitmap);
                 logResults(logs, results);
             }
             logs.logcat(null, "ocr_test_end");
@@ -42,16 +43,14 @@ final class OcrTest {
         }
     }
 
-    static void logResults(LogHub logs, List<PaddleOcrResult> results) {
+    static void logResults(LogHub logs, List<TessOcrResult> results) {
         logs.logcat(null, "ocr_result_count=" + results.size());
         for (int i = 0; i < results.size(); i++) {
-            PaddleOcrResult result = results.get(i);
+            TessOcrResult result = results.get(i);
             Rect bounds = result.getBounds();
             logs.logcat(null, "ocr[" + i + "] text=" + result.getText()
                     + " confidence=" + result.getConfidence()
-                    + " bounds=" + bounds.left + "," + bounds.top + "," + bounds.right + "," + bounds.bottom
-                    + " cls=" + result.getClsIndex()
-                    + " clsConfidence=" + result.getClsConfidence());
+                    + " bounds=" + bounds.left + "," + bounds.top + "," + bounds.right + "," + bounds.bottom);
         }
     }
 }

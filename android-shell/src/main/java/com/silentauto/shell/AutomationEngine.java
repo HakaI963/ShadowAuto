@@ -10,8 +10,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.silentauto.paddlerocr.PaddleOcrEngine;
-import com.silentauto.paddlerocr.PaddleOcrResult;
+import com.silentauto.tessocr.TessOcrEngine;
+import com.silentauto.tessocr.TessOcrResult;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,7 +40,7 @@ final class AutomationEngine {
     private final Map<String, TaskState> tasks = new LinkedHashMap<>();
     private final AtomicInteger nextTaskId = new AtomicInteger(1);
     private UiBridge ui;
-    private PaddleOcrEngine ocr;
+    private TessOcrEngine ocr;
 
     AutomationEngine(Config config, LogHub logs) {
         this.baseConfig = config;
@@ -563,11 +563,11 @@ final class AutomationEngine {
                 logs.logcat(task.taskId, "ocr_dump_error no latest frame available");
                 return JsonRpc.GSON.toJson(object);
             }
-            List<PaddleOcrResult> results = getOcrEngine().recognize(bitmap);
+            List<TessOcrResult> results = getOcrEngine().recognize(bitmap);
             object.addProperty("ocr_available", true);
             StringBuilder combined = new StringBuilder();
             for (int i = 0; i < results.size(); i++) {
-                PaddleOcrResult result = results.get(i);
+                TessOcrResult result = results.get(i);
                 if (!Config.empty(result.getText())) {
                     if (combined.length() > 0) {
                         combined.append('\n');
@@ -582,10 +582,10 @@ final class AutomationEngine {
         } catch (Throwable e) {
             object.addProperty("ocr_available", false);
             object.addProperty("error", rootCauseMessage(e));
-            object.addProperty("ocr_root", PaddleOcrEngine.DEFAULT_ROOT);
+            object.addProperty("ocr_root", TessOcrEngine.DEFAULT_ROOT);
             object.addProperty("ocr_diagnosis", ocrDiagnosis());
-            object.addProperty("setup", "download ocr-runtime.zip from the GitHub release, unzip, then run: adb push ocr/. /data/local/tmp/shadowauto/ocr/ (must contain lib/arm64-v8a/*.so, models/ch_PP-OCRv2/*.nb, labels/ppocr_keys_v1.txt), then retry get_screen_ocr once");
-            object.addProperty("fallback", "OCR runtime is missing on the device; do not retry OCR in a loop, use get_ui_layout (mode=full) and continue with UI targets/coordinates");
+            object.addProperty("setup", "unified app deploys Tesseract files on launch (tap Fix); legacy: push tessdata/*.traineddata and lib/arm64-v8a/*.so to /data/local/tmp/shadowauto/ocr/, then retry get_screen_ocr once");
+            object.addProperty("fallback", "OCR runtime is unavailable on the device; do not retry OCR in a loop, use get_ui_layout (mode=full) and continue with UI targets/coordinates");
             logs.error(task.taskId, "ocr dump failed", e);
         } finally {
             if (bitmap != null) {
@@ -597,32 +597,7 @@ final class AutomationEngine {
 
     private String ocrDiagnosis() {
         try {
-            java.io.File root = new java.io.File(PaddleOcrEngine.DEFAULT_ROOT);
-            if (!root.isDirectory()) {
-                return "ocr root missing: " + root + " (nothing pushed yet)";
-            }
-            String[] expected = {
-                    "lib/arm64-v8a/libNative.so",
-                    "lib/arm64-v8a/libc++_shared.so",
-                    "lib/arm64-v8a/libomp.so",
-                    "models/ch_PP-OCRv2/det_db.nb",
-                    "models/ch_PP-OCRv2/rec_crnn.nb",
-                    "models/ch_PP-OCRv2/cls.nb",
-                    "labels/ppocr_keys_v1.txt",
-            };
-            StringBuilder missing = new StringBuilder();
-            for (String rel : expected) {
-                if (!new java.io.File(root, rel).isFile()) {
-                    if (missing.length() > 0) {
-                        missing.append(',');
-                    }
-                    missing.append(rel);
-                }
-            }
-            if (missing.length() == 0) {
-                return "all expected OCR files present under " + root;
-            }
-            return "missing under " + root + ": " + missing;
+            return TessOcrEngine.diagnose();
         } catch (Throwable e) {
             return "diagnosis failed: " + e.getMessage();
         }
@@ -630,9 +605,9 @@ final class AutomationEngine {
 
     synchronized JsonObject ocrStatusJson() {
         JsonObject object = new JsonObject();
-        object.addProperty("ocr_root", PaddleOcrEngine.DEFAULT_ROOT);
+        object.addProperty("ocr_root", TessOcrEngine.DEFAULT_ROOT);
         object.addProperty("diagnosis", ocrDiagnosis());
-        object.addProperty("native_available", PaddleOcrEngine.isNativeAvailable());
+        object.addProperty("native_available", TessOcrEngine.isNativeAvailable());
         try {
             getOcrEngine();
             object.addProperty("ocr_available", true);
@@ -661,10 +636,10 @@ final class AutomationEngine {
         return out.length() == 0 ? "unknown error" : out.toString();
     }
 
-    private PaddleOcrEngine getOcrEngine() throws Exception {
+    private TessOcrEngine getOcrEngine() throws Exception {
         if (ocr == null) {
             logs.logcat(null, "ocr_engine_init_begin");
-            PaddleOcrEngine engine = new PaddleOcrEngine();
+            TessOcrEngine engine = new TessOcrEngine();
             try {
                 engine.init();
             } catch (Throwable e) {
@@ -683,7 +658,7 @@ final class AutomationEngine {
         return ocr;
     }
 
-    private JsonObject ocrResultJson(int index, PaddleOcrResult result) {
+    private JsonObject ocrResultJson(int index, TessOcrResult result) {
         JsonObject object = new JsonObject();
         Rect bounds = result.getBounds();
         object.addProperty("index", index);
@@ -708,10 +683,10 @@ final class AutomationEngine {
         return object;
     }
 
-    private void logOcrResults(String taskId, List<PaddleOcrResult> results) {
+    private void logOcrResults(String taskId, List<TessOcrResult> results) {
         logs.logcat(taskId, "ocr_result_count=" + results.size());
         for (int i = 0; i < results.size(); i++) {
-            PaddleOcrResult result = results.get(i);
+            TessOcrResult result = results.get(i);
             Rect bounds = result.getBounds();
             logs.logcat(taskId, "ocr[" + i + "] text=" + result.getText()
                     + " confidence=" + result.getConfidence()

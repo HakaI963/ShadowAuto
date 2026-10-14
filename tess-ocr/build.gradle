@@ -1,0 +1,51 @@
+plugins {
+    id "com.android.library"
+}
+
+android {
+    namespace = "com.silentauto.tessocr"
+    compileSdk = 36
+    // Pinned so AGP packages a matching libc++_shared.so for tess-two's
+    // prebuilt native libs. No CMake build in this module.
+    ndkVersion = "23.1.7779620"
+
+    defaultConfig {
+        minSdk = 29
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Tesseract 4.x + Leptonica, prebuilt arm64/x86 .so, pure Maven Central.
+    implementation "com.rmtheis:tess-two:9.1.0"
+}
+
+def tessdataFiles = [
+        "chi_sim.traineddata": "https://raw.githubusercontent.com/tesseract-ocr/tessdata/main/chi_sim.traineddata",
+        "eng.traineddata"    : "https://raw.githubusercontent.com/tesseract-ocr/tessdata/main/eng.traineddata",
+]
+
+tasks.register("prepareTesseractOcr") {
+    group = "ocr"
+    description = "Download Tesseract chi_sim+eng traineddata for offline OCR."
+    doLast {
+        File dir = file("TessData/tessdata")
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new GradleException("Create tessdata directory failed: ${dir}")
+        }
+        tessdataFiles.each { name, url ->
+            File dest = new File(dir, name)
+            if (!dest.isFile() || dest.length() < 1000000) {
+                logger.lifecycle("Downloading ${url}")
+                ant.get(src: url, dest: dest)
+            }
+            if (!dest.isFile() || dest.length() < 1000000) {
+                throw new GradleException("Download failed or too small: ${dest} (${dest.length()} bytes)")
+            }
+        }
+    }
+}

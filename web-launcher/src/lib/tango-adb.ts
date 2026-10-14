@@ -10,16 +10,13 @@ const controllerComponent = 'com.silentauto.controller/.MainActivity';
 const pidPath = '/data/local/tmp/silent-auto.pid';
 const ocrRoot = '/data/local/tmp/shadowauto/ocr';
 const ocrFiles = [
-  'lib/arm64-v8a/libNative.so',
   'lib/arm64-v8a/libc++_shared.so',
-  'lib/arm64-v8a/libomp.so',
-  'lib/arm64-v8a/libhiai.so',
-  'lib/arm64-v8a/libhiai_ir.so',
-  'lib/arm64-v8a/libhiai_ir_build.so',
-  'models/ch_PP-OCRv2/det_db.nb',
-  'models/ch_PP-OCRv2/rec_crnn.nb',
-  'models/ch_PP-OCRv2/cls.nb',
-  'labels/ppocr_keys_v1.txt'
+  'lib/arm64-v8a/libjpgt.so',
+  'lib/arm64-v8a/libpngt.so',
+  'lib/arm64-v8a/liblept.so',
+  'lib/arm64-v8a/libtess.so',
+  'tessdata/chi_sim.traineddata',
+  'tessdata/eng.traineddata'
 ];
 
 export type LaunchProgress =

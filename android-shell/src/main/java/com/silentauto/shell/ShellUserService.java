@@ -1,16 +1,12 @@
 package com.silentauto.shell;
 
 import android.content.Context;
-import android.content.res.AssetManager;
 import android.os.Binder;
 import android.os.Looper;
 import android.os.Parcel;
 import android.util.Log;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
+import com.silentauto.tessocr.TessAssets;
 
 /**
  * Shizuku UserService entry point for the unified APK.
@@ -32,23 +28,7 @@ import java.io.OutputStream;
 public class ShellUserService extends Binder {
     private static final String TAG = "ShellUserService";
     private static final int TRANSACTION_DESTROY = 16777115;
-    private static final String OCR_ROOT = "/data/local/tmp/shadowauto/ocr";
     private static volatile boolean started;
-
-    private static final String[] OCR_ASSETS = {
-            "ocr/models/ch_PP-OCRv2/det_db.nb",
-            "ocr/models/ch_PP-OCRv2/rec_crnn.nb",
-            "ocr/models/ch_PP-OCRv2/cls.nb",
-            "ocr/labels/ppocr_keys_v1.txt",
-    };
-    private static final String[] NATIVE_LIBS = {
-            "libNative.so",
-            "libc++_shared.so",
-            "libomp.so",
-            "libhiai.so",
-            "libhiai_ir.so",
-            "libhiai_ir_build.so",
-    };
 
     public ShellUserService() {
         start(null);
@@ -65,7 +45,10 @@ public class ShellUserService extends Binder {
         started = true;
         if (context != null) {
             try {
-                Log.i(TAG, deployOcr(context));
+                // Redeploy as shell so OCR files are shell-owned and readable
+                // in this process (app-deployed copies may carry the wrong
+                // UID/SELinux label).
+                Log.i(TAG, TessAssets.deploy(context));
             } catch (Throwable e) {
                 Log.w(TAG, "ocr deploy failed: " + e.getMessage());
             }
@@ -80,101 +63,6 @@ public class ShellUserService extends Binder {
         }, "shell-userservice-main");
         thread.setDaemon(false);
         thread.start();
-    }
-
-    private static String deployOcr(Context context) {
-        StringBuilder log = new StringBuilder("ocr deploy (shell): ");
-        File root = new File(OCR_ROOT);
-        File modelDir = new File(root, "models/ch_PP-OCRv2");
-        File labelDir = new File(root, "labels");
-        File libDir = new File(root, "lib/arm64-v8a");
-        modelDir.mkdirs();
-        labelDir.mkdirs();
-        libDir.mkdirs();
-        AssetManager assets = context.getAssets();
-        for (String assetPath : OCR_ASSETS) {
-            File dest = new File(root, assetPath.substring("ocr/".length()));
-            try {
-                File parent = dest.getParentFile();
-                if (parent != null) {
-                    parent.mkdirs();
-                }
-                try (InputStream in = assets.open(assetPath);
-                     OutputStream out = new FileOutputStream(dest)) {
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) != -1) {
-                        out.write(buf, 0, n);
-                    }
-                }
-                dest.setReadable(true, false);
-                log.append("ok:").append(assetPath).append(' ');
-            } catch (Throwable e) {
-                log.append("fail:").append(assetPath).append('=').append(e.getMessage()).append(' ');
-            }
-        }
-        String nativeDir = null;
-        try {
-            nativeDir = context.getApplicationInfo().nativeLibraryDir;
-        } catch (Throwable ignored) {
-        }
-        if (nativeDir != null) {
-            for (String name : NATIVE_LIBS) {
-                File src = new File(nativeDir, name);
-                if (!src.isFile()) {
-                    continue;
-                }
-                try {
-                    copyFile(src, new File(libDir, name));
-                    new File(libDir, name).setReadable(true, false);
-                    log.append("ok:lib/").append(name).append(' ');
-                } catch (Throwable e) {
-                    log.append("fail:lib/").append(name).append(' ');
-                }
-            }
-        } else {
-            log.append("nativeLibraryDir=null ");
-        }
-        try {
-            Runtime.getRuntime().exec(new String[]{"chmod", "-R", "755", OCR_ROOT}).waitFor();
-        } catch (Throwable ignored) {
-        }
-        log.append(diagnose());
-        return log.toString();
-    }
-
-    private static String diagnose() {
-        File root = new File(OCR_ROOT);
-        StringBuilder missing = new StringBuilder();
-        String[] expected = {
-                "models/ch_PP-OCRv2/det_db.nb",
-                "models/ch_PP-OCRv2/rec_crnn.nb",
-                "models/ch_PP-OCRv2/cls.nb",
-                "labels/ppocr_keys_v1.txt",
-                "lib/arm64-v8a/libNative.so",
-                "lib/arm64-v8a/libc++_shared.so",
-                "lib/arm64-v8a/libomp.so",
-        };
-        for (String rel : expected) {
-            if (!new File(root, rel).isFile()) {
-                if (missing.length() > 0) {
-                    missing.append(',');
-                }
-                missing.append(rel);
-            }
-        }
-        return missing.length() == 0 ? "all ocr files present" : ("missing: " + missing);
-    }
-
-    private static void copyFile(File src, File dest) throws Exception {
-        try (InputStream in = new java.io.FileInputStream(src);
-             OutputStream out = new FileOutputStream(dest)) {
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-        }
     }
 
     @Override
