@@ -11,10 +11,10 @@ const pidPath = '/data/local/tmp/silent-auto.pid';
 const ocrRoot = '/data/local/tmp/shadowauto/ocr';
 const ocrFiles = [
   'lib/arm64-v8a/libc++_shared.so',
-  'lib/arm64-v8a/libjpgt.so',
-  'lib/arm64-v8a/libpngt.so',
-  'lib/arm64-v8a/liblept.so',
-  'lib/arm64-v8a/libtess.so',
+  'lib/arm64-v8a/libjpeg.so',
+  'lib/arm64-v8a/libpngx.so',
+  'lib/arm64-v8a/libleptonica.so',
+  'lib/arm64-v8a/libtesseract.so',
   'tessdata/chi_sim.traineddata',
   'tessdata/eng.traineddata'
 ];

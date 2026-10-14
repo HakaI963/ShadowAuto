@@ -20,8 +20,9 @@ android {
 }
 
 dependencies {
-    // Tesseract 4.x + Leptonica, prebuilt arm64/x86 .so, pure Maven Central.
-    implementation "com.rmtheis:tess-two:9.1.0"
+    // Tesseract 5.5 + Leptonica, prebuilt arm64/x86 .so via JitPack (cached
+    // 4.8.0 build). No NDK/CMake needed on our side.
+    implementation "com.github.adaptech-cz.Tesseract4Android:tesseract4android:4.8.0"
 }
 
 def tessdataFiles = [

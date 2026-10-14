@@ -159,7 +159,7 @@ adb shell "kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data
 
 ## Tesseract 离线 OCR
 
-`tess-ocr` 模块负责 Tesseract Android 集成（Maven Central 的 tess-two，无需 NDK 构建），用于对不可访问、自绘页面做视觉兜底。shell 进程会直接调用该模块，统一版 controller-app 也打包了同样的代码和训练数据并在启动时自动部署。OCR 默认开启；下载训练数据执行：
+`tess-ocr` 模块负责 Tesseract Android 集成（JitPack 的 Tesseract4Android 4.8.0（Tesseract 5.5），无需 NDK 构建），用于对不可访问、自绘页面做视觉兜底。shell 进程会直接调用该模块，统一版 controller-app 也打包了同样的代码和训练数据并在启动时自动部署。OCR 默认开启；下载训练数据执行：
 
 ```sh
 ./gradlew :tess-ocr:prepareTesseractOcr

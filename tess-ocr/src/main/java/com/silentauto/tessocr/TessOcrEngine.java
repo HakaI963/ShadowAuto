@@ -25,7 +25,7 @@ public final class TessOcrEngine implements AutoCloseable {
     public static final String DEFAULT_LANG = "chi_sim+eng";
 
     /** Dependency order: C++ runtime, image codecs, leptonica, tesseract. */
-    static final String[] LIB_LOAD_NAMES = {"c++_shared", "jpgt", "pngt", "lept", "tess"};
+    static final String[] LIB_LOAD_NAMES = {"c++_shared", "jpeg", "pngx", "leptonica", "tesseract"};
     static final String[] LANG_FILES = {"chi_sim.traineddata", "eng.traineddata"};
 
     private TessBaseAPI api;
