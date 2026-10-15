@@ -28,6 +28,8 @@ final class AutomationEngine {
     private static final int MAX_OBSERVATION_TOOL_CALLS = 2;
     private static final int MAX_UI_CHARS = 200_000;
     private static final int PROGRESS_LOG_EVERY_STEPS = 25;
+    private static final int STEP_CONTINUE = 0;
+    private static final int STEP_DONE = 1;
     private static final int LOGCAT_LAYOUT_CHUNK = 3500;
     private static final String TOOL_SYSTEM_PROMPT = """
             You operate Android only by calling exactly one provided tool. Do not describe the action.
@@ -168,6 +170,7 @@ final class AutomationEngine {
             if (request.live) {
                 task.liveFirstCommand = Config.empty(request.goal) ? null : request.goal.trim();
                 logs.task(task.taskId, "live mode ready - send a command (scroll, click, open app) or stop to end");
+                launchHomeOnDisplay(task, bridge);
             } else {
                 ActionDecision app = chooseApp(ai, request.goal, apps);
                 if (Config.empty(app.packageName)) {
@@ -192,84 +195,22 @@ final class AutomationEngine {
                     }
                 }
                 step++;
-                String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
-                rememberUiObservation(task, dump);
-                if (step > 1 && (step - 1) % PROGRESS_LOG_EVERY_STEPS == 0) {
-                    logs.task(task.taskId, "still running at step " + step + " (no step limit; stop from the app to end)");
-                }
-                ActionDecision action = nextAction(task, ai, bridge, request.goal, task.currentPackage, step, task.display.displayId, dump, liveCommand);
-                action = applyAutoCorrections(task, action);
-                logs.task(task.taskId, "step " + step + ": " + action.action + " " + safe(action.reason));
-                if ("done".equals(action.action)) {
-                    if (request.live) {
-                        logs.task(task.taskId, "command complete - waiting for the next command");
-                        continue;
+                int stepResult;
+                try {
+                    stepResult = runStep(task, ai, bridge, input, clipboard, apps,
+                            request.goal, step, request.live, liveCommand);
+                } catch (Throwable stepError) {
+                    if (!request.live) {
+                        throw stepError;
                     }
+                    logs.task(task.taskId, "live command failed: " + describeError(stepError)
+                            + " - still waiting for the next command");
+                    continue;
+                }
+                if (stepResult == STEP_DONE) {
                     task.completed = true;
                     break;
                 }
-                UiBridge.ClickResult clickResult = null;
-                UiBridge.FocusResult focusResult = null;
-                if ("tap_target".equals(action.action)) {
-                    clickResult = tapTarget(task.taskId, bridge, input, task.display.displayId, task.display.width, task.display.height, action.targetIndex);
-                } else if ("focus_input".equals(action.action)) {
-                    focusResult = focusInput(task.taskId, bridge, input, task.display.displayId, task.display.width, task.display.height, action.inputIndex, action.query);
-                } else if ("tap".equals(action.action)) {
-                    int x = clamp(action.x, 0, task.display.width - 1);
-                    int y = clamp(action.y, 0, task.display.height - 1);
-                    if (x != action.x || y != action.y) {
-                        logs.task(task.taskId, "tap adjusted to display bounds: " + x + "," + y);
-                    }
-                    logs.task(task.taskId, "tap inject display-local " + x + "," + y + " on " + task.display.width + "x" + task.display.height);
-                    input.tap(task.display.displayId, x, y);
-                } else if ("long_press".equals(action.action)) {
-                    longPress(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action.x, action.y, action.durationMs);
-                } else if ("drag".equals(action.action)) {
-                    drag(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action);
-                } else if ("scroll".equals(action.action)) {
-                    scrollUi(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action.direction, action.distance);
-                } else if ("text".equals(action.action)) {
-                    inputText(task.taskId, bridge, input, clipboard, task.display.displayId, action.text);
-                } else if ("set_clipboard".equals(action.action)) {
-                    clipboard.setText(action.text);
-                    logs.task(task.taskId, "clipboard set");
-                } else if ("paste".equals(action.action)) {
-                    pasteClipboard(bridge, input, task.display.displayId);
-                } else if ("copy".equals(action.action)) {
-                    if (bridge.copySelection(task.display.displayId)) {
-                        logs.task(task.taskId, "copied selection: " + truncate(clipboard.getText(), 80));
-                    } else {
-                        logs.task(task.taskId, "copy selection failed");
-                    }
-                } else if ("select_all".equals(action.action)) {
-                    if (bridge.selectAll(task.display.displayId)) {
-                        logs.task(task.taskId, "selected all text by accessibility");
-                    } else {
-                        input.selectAll(task.display.displayId);
-                        logs.task(task.taskId, "selected all text by key events");
-                    }
-                } else if ("delete".equals(action.action)) {
-                    if (bridge.deleteSelection(task.display.displayId)) {
-                        logs.task(task.taskId, "deleted selected text by accessibility");
-                    } else {
-                        input.delete(task.display.displayId);
-                        logs.task(task.taskId, "delete key sent");
-                    }
-                } else if ("clear_text".equals(action.action)) {
-                    clearText(task.taskId, bridge, input, task.display.displayId);
-                } else if ("back".equals(action.action)) {
-                    input.key(task.display.displayId, KeyEvent.KEYCODE_BACK);
-                } else if ("key".equals(action.action)) {
-                    pressKey(task.taskId, input, task.display.displayId, action.key);
-                } else if ("submit_search".equals(action.action)) {
-                    submitSearch(task, bridge, input, task.display.displayId, task.display.width, task.display.height);
-                } else if ("open_app".equals(action.action)) {
-                    openApp(task, action, apps);
-                } else {
-                    sleep(task, Math.max(300, action.ms));
-                }
-                rememberAction(task, action, clickResult, focusResult);
-                sleep(task, 350);
             }
             task.state = "idle";
             if (task.stop.get()) {
@@ -343,20 +284,92 @@ final class AutomationEngine {
         return null;
     }
 
-    private void openApp(TaskState task, ActionDecision action, List<AppCatalog.AppInfo> apps) throws Exception {
+    private void openApp(TaskState task, ActionDecision action, List<AppCatalog.AppInfo> apps,
+                         UiBridge bridge, boolean live) {
         String name = Config.empty(action.appName) ? action.packageName : action.appName;
         String packageName = resolvePackage(name, apps);
         if (Config.empty(packageName)) {
             packageName = action.packageName;
         }
         if (Config.empty(packageName)) {
-            logs.task(task.taskId, "open app not found: " + safe(name));
+            logs.task(task.taskId, "open app failed: no installed app matches \"" + safe(name) + "\"");
             return;
         }
-        appCatalog.launchPackage(task.taskId, packageName, task.display.displayId);
+        logs.task(task.taskId, "opening " + packageName);
+        try {
+            // Live commands bring the app up without force-stopping it, so an
+            // instance the user has open elsewhere is not killed.
+            appCatalog.launchPackage(task.taskId, packageName, task.display.displayId, !live);
+        } catch (Throwable launchError) {
+            logs.task(task.taskId, "open app failed: " + describeError(launchError));
+            return;
+        }
         task.currentPackage = packageName;
-        logs.task(task.taskId, "opened " + packageName);
-        sleep(task, 1500);
+        waitForAppWindow(task, bridge, packageName, live ? 9000 : 3000);
+    }
+
+    /**
+     * Wait (bounded) until the launched app's window shows up in the UI dump.
+     * Cold starts on a virtual display can take seconds; acting on a stale or
+     * blank screen mid-command would make the next step nonsense.
+     */
+    private void waitForAppWindow(TaskState task, UiBridge bridge, String packageName, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (!task.stop.get() && System.currentTimeMillis() < deadline) {
+            try {
+                String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
+                if (dump.contains(packageName)) {
+                    logs.task(task.taskId, "app window up: " + packageName);
+                    sleep(task, 400);
+                    return;
+                }
+            } catch (Throwable ignored) {
+            }
+            sleep(task, 700);
+        }
+        if (!task.stop.get()) {
+            logs.task(task.taskId, "app window not detected for " + packageName
+                    + " after " + (timeoutMs / 1000) + "s; the app may be slow to start or "
+                    + "may not fully support a virtual display");
+        }
+    }
+
+    /**
+     * Live sessions start on the launcher so the virtual screen is never
+     * blank; if the launcher refuses to render on a secondary display
+     * (some OEMs), fall back to Settings as an interactive screen.
+     */
+    private void launchHomeOnDisplay(TaskState task, UiBridge bridge) {
+        try {
+            appCatalog.launchHome(task.taskId, task.display.displayId);
+            sleep(task, 1500);
+            if (screenLooksEmpty(task, bridge)) {
+                logs.task(task.taskId, "launcher did not render on the virtual display; opening Settings instead");
+                appCatalog.launchPackage(task.taskId, "com.android.settings", task.display.displayId, false);
+                sleep(task, 1200);
+            }
+        } catch (Throwable homeError) {
+            logs.task(task.taskId, "home screen launch skipped: " + describeError(homeError));
+        }
+    }
+
+    private boolean screenLooksEmpty(TaskState task, UiBridge bridge) {
+        try {
+            String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
+            return dump.contains("\"windows\":[]");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static String describeError(Throwable error) {
+        if (error == null) {
+            return "unknown error";
+        }
+        String message = error.getMessage();
+        return message == null || message.trim().isEmpty()
+                ? error.getClass().getSimpleName()
+                : error.getClass().getSimpleName() + ": " + message;
     }
 
     private String resolvePackage(String name, List<AppCatalog.AppInfo> apps) {
@@ -584,6 +597,90 @@ final class AutomationEngine {
                 Apps:
                 %s""", goal, appCatalog.appsText(apps));
         return ActionDecision.from(ai.complete(prompt));
+    }
+
+    private int runStep(TaskState task, AiClient ai, UiBridge bridge, InputBridge input,
+                        ClipboardBridge clipboard, List<AppCatalog.AppInfo> apps,
+                        String goal, int step, boolean live, String liveCommand) throws Exception {
+        String dump = bridge.dump(task.display.displayId, task.display.width, task.display.height, UiBridge.MODE_SIMPLE);
+        rememberUiObservation(task, dump);
+        if (step > 1 && (step - 1) % PROGRESS_LOG_EVERY_STEPS == 0) {
+            logs.task(task.taskId, "still running at step " + step + " (no step limit; stop from the app to end)");
+        }
+        ActionDecision action = nextAction(task, ai, bridge, goal, task.currentPackage, step, task.display.displayId, dump, liveCommand);
+        action = applyAutoCorrections(task, action);
+        logs.task(task.taskId, "step " + step + ": " + action.action + " " + safe(action.reason));
+        if ("done".equals(action.action)) {
+            if (live) {
+                logs.task(task.taskId, "command complete - waiting for the next command");
+                return STEP_CONTINUE;
+            }
+            return STEP_DONE;
+        }
+        UiBridge.ClickResult clickResult = null;
+        UiBridge.FocusResult focusResult = null;
+        if ("tap_target".equals(action.action)) {
+            clickResult = tapTarget(task.taskId, bridge, input, task.display.displayId, task.display.width, task.display.height, action.targetIndex);
+        } else if ("focus_input".equals(action.action)) {
+            focusResult = focusInput(task.taskId, bridge, input, task.display.displayId, task.display.width, task.display.height, action.inputIndex, action.query);
+        } else if ("tap".equals(action.action)) {
+            int x = clamp(action.x, 0, task.display.width - 1);
+            int y = clamp(action.y, 0, task.display.height - 1);
+            if (x != action.x || y != action.y) {
+                logs.task(task.taskId, "tap adjusted to display bounds: " + x + "," + y);
+            }
+            logs.task(task.taskId, "tap inject display-local " + x + "," + y + " on " + task.display.width + "x" + task.display.height);
+            input.tap(task.display.displayId, x, y);
+        } else if ("long_press".equals(action.action)) {
+            longPress(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action.x, action.y, action.durationMs);
+        } else if ("drag".equals(action.action)) {
+            drag(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action);
+        } else if ("scroll".equals(action.action)) {
+            scrollUi(task.taskId, input, task.display.displayId, task.display.width, task.display.height, action.direction, action.distance);
+        } else if ("text".equals(action.action)) {
+            inputText(task.taskId, bridge, input, clipboard, task.display.displayId, action.text);
+        } else if ("set_clipboard".equals(action.action)) {
+            clipboard.setText(action.text);
+            logs.task(task.taskId, "clipboard set");
+        } else if ("paste".equals(action.action)) {
+            pasteClipboard(bridge, input, task.display.displayId);
+        } else if ("copy".equals(action.action)) {
+            if (bridge.copySelection(task.display.displayId)) {
+                logs.task(task.taskId, "copied selection: " + truncate(clipboard.getText(), 80));
+            } else {
+                logs.task(task.taskId, "copy selection failed");
+            }
+        } else if ("select_all".equals(action.action)) {
+            if (bridge.selectAll(task.display.displayId)) {
+                logs.task(task.taskId, "selected all text by accessibility");
+            } else {
+                input.selectAll(task.display.displayId);
+                logs.task(task.taskId, "selected all text by key events");
+            }
+        } else if ("delete".equals(action.action)) {
+            if (bridge.deleteSelection(task.display.displayId)) {
+                logs.task(task.taskId, "deleted selected text by accessibility");
+            } else {
+                input.delete(task.display.displayId);
+                logs.task(task.taskId, "delete key sent");
+            }
+        } else if ("clear_text".equals(action.action)) {
+            clearText(task.taskId, bridge, input, task.display.displayId);
+        } else if ("back".equals(action.action)) {
+            input.key(task.display.displayId, KeyEvent.KEYCODE_BACK);
+        } else if ("key".equals(action.action)) {
+            pressKey(task.taskId, input, task.display.displayId, action.key);
+        } else if ("submit_search".equals(action.action)) {
+            submitSearch(task, bridge, input, task.display.displayId, task.display.width, task.display.height);
+        } else if ("open_app".equals(action.action)) {
+            openApp(task, action, apps, bridge, live);
+        } else {
+            sleep(task, Math.max(300, action.ms));
+        }
+        rememberAction(task, action, clickResult, focusResult);
+        sleep(task, 350);
+    
+        return STEP_CONTINUE;
     }
 
     private ActionDecision nextAction(TaskState task, AiClient ai, UiBridge bridge, String goal, String packageName, int step, int displayId, String uiDump, String liveCommand) throws Exception {

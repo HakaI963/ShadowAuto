@@ -79,6 +79,10 @@ final class AppCatalog {
     }
 
     void launchPackage(String taskId, String packageName, int displayId) throws Exception {
+        launchPackage(taskId, packageName, displayId, true);
+    }
+
+    void launchPackage(String taskId, String packageName, int displayId, boolean forceStop) throws Exception {
         PackageManager pm = ShellContext.get().getPackageManager();
         Intent intent = pm.getLaunchIntentForPackage(packageName);
         if (intent == null) {
@@ -90,10 +94,12 @@ final class AppCatalog {
         }
         // Single shell invocation instead of two: halves process-spawn latency.
         // `;` (not &&) preserves the old behavior: start runs even if the
-        // preceding force-stop reports an error.
-        String command = "am force-stop " + shellQuote(packageName)
-                + " ; am start --display " + displayId
-                + " -f 0x10008000 -n " + shellQuote(component.flattenToShortString());
+        // preceding force-stop reports an error. Live commands skip the
+        // force-stop so the user's own running app is not killed.
+        String command = (forceStop ? "am force-stop " + shellQuote(packageName) + " ; " : "")
+                + "am start --display " + displayId
+                + " -f " + (forceStop ? "0x10008000" : "0x10000000")
+                + " -n " + shellQuote(component.flattenToShortString());
         Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
         StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
@@ -104,6 +110,24 @@ final class AppCatalog {
         }
         int code = process.waitFor();
         logs.info(taskId, "am start exit=" + code + " " + output.toString().trim());
+    }
+
+    /** Shows the device launcher on the given display (live sessions must not start blank). */
+    void launchHome(String taskId, int displayId) throws Exception {
+        String command = "am start --display " + displayId
+                + " -a android.intent.action.MAIN"
+                + " -c android.intent.category.HOME"
+                + " -f 0x10000000";
+        Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append('\n');
+            }
+        }
+        int code = process.waitFor();
+        logs.info(taskId, "am home exit=" + code + " " + output.toString().trim());
     }
 
     private static String shellQuote(String value) {

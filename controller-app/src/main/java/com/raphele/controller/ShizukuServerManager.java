@@ -34,14 +34,14 @@ public final class ShizukuServerManager {
     public static final String MANAGER_DOWNLOAD = "https://shizuku.rikka.app/download/";
     private static final String SERVICE_CLASS = "com.raphele.shell.ShellUserService";
     private static final String SERVICE_TAG = "raphele-shell";
-    private static final int SERVICE_VERSION = 15;
+    private static final int SERVICE_VERSION = 16;
     /**
      * Minimum shell RpcServer.SERVER_VERSION that supports the methods this
      * app uses (guideTask, live startTask etc.). Keep in sync with the shell
      * constant when shipping; the app auto-restarts any running server below
      * this.
      */
-    public static final int MIN_SERVER_VERSION = 15;
+    public static final int MIN_SERVER_VERSION = 16;
     private static final AtomicInteger IDS = new AtomicInteger(1000);
 
     public interface Callback {
