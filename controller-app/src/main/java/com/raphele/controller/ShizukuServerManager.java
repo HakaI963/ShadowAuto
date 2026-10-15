@@ -34,14 +34,14 @@ public final class ShizukuServerManager {
     public static final String MANAGER_DOWNLOAD = "https://shizuku.rikka.app/download/";
     private static final String SERVICE_CLASS = "com.raphele.shell.ShellUserService";
     private static final String SERVICE_TAG = "raphele-shell";
-    private static final int SERVICE_VERSION = 14;
+    private static final int SERVICE_VERSION = 15;
     /**
      * Minimum shell RpcServer.SERVER_VERSION that supports the methods this
      * app uses (guideTask, live startTask etc.). Keep in sync with the shell
      * constant when shipping; the app auto-restarts any running server below
      * this.
      */
-    public static final int MIN_SERVER_VERSION = 14;
+    public static final int MIN_SERVER_VERSION = 15;
     private static final AtomicInteger IDS = new AtomicInteger(1000);
 
     public interface Callback {
@@ -99,6 +99,11 @@ public final class ShizukuServerManager {
     /**
      * Tries to send the Shizuku permission request.
      *
+     * <p>Always triggers the Shizuku prompt when the binder is alive and the
+     * permission is not granted yet. A previous denial (rationale=true) does
+     * NOT block asking again - only Shizuku itself can auto-deny after
+     * "don't ask again", and the result listener reports that.
+     *
      * @return null when the request was handed to Shizuku (watch for the
      * system prompt / manager result); otherwise the concrete reason why no
      * prompt can appear, to show in the UI instead of failing silently.
@@ -110,9 +115,6 @@ public final class ShizukuServerManager {
             }
             if (hasPermission()) {
                 return null;
-            }
-            if (shouldShowRationale()) {
-                return "blocked: allowed once with 'don't ask again' - open Shizuku manager and allow this app";
             }
             Shizuku.requestPermission(PERMISSION_CODE);
             return null;
@@ -254,7 +256,9 @@ public final class ShizukuServerManager {
                     Shizuku.unbindUserService(args, connection, true);
                 } catch (Throwable ignored) {
                 }
-                for (int i = 0; i < 10; i++) {
+                // The service first reclaims the port (killing leftover
+                // daemons) and only then exits, so allow a few extra seconds.
+                for (int i = 0; i < 14; i++) {
                     if (!probe(PORT, 300)) {
                         callback.onResult(true, "server stopped");
                         return;

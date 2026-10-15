@@ -42,6 +42,7 @@
     <string name="server_outdated_busy">Server outdated (guides off) — stop tasks, then Stop + Start server</string>
     <string name="server_outdated_toast">An older shell server is running. Tap Stop server, then Start server to enable guides.</string>
     <string name="server_updated">Shell server updated — guides enabled</string>
+    <string name="server_update_stalled">Old server still answering — tap Stop server, then Start server</string>
     <string name="server_update_failed">Server update failed: %1$s</string>
     <string name="shizuku_missing">Shizuku not running: start Shizuku, then tap Start server</string>
     <string name="shizuku_denied">Shizuku permission needed: tap Start server to grant</string>
@@ -54,6 +55,9 @@
     <string name="state_denied_temp">Shizuku permission needed — tap Grant</string>
     <string name="state_denied_perm">Permission blocked — open Shizuku manager and allow this app</string>
     <string name="perm_sent">Permission request sent — confirm the prompt in Shizuku</string>
+    <string name="perm_sent_update">Permission request sent — grant it to update the server</string>
+    <string name="perm_sent_stop">Permission request sent — grant it to stop the server</string>
+    <string name="perm_denied">Shizuku permission denied — tap again to re-ask, or allow Raphele in the Shizuku app</string>
     <string name="perm_failed">Permission request failed: %1$s</string>
     <string name="start_shizuku_first">Shizuku opened — start the service there, then return here</string>
     <string name="open_failed">Cannot open anything — install/start Shizuku manually</string>

@@ -39,6 +39,9 @@ public final class Main {
         killExistingShellProcesses();
         ShellContext.init();
         ensurePortFree(config.port, logs);
+        // Tell the Shizuku entry point that stale port holders are gone: a
+        // pending DESTROY may now safely exit this process.
+        ShellUserService.notifyStartupComplete();
         if (hasFlag(args, "--video-test")) {
             VideoTest.run(logs);
             return;

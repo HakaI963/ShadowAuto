@@ -53,6 +53,10 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     /** One automatic update attempt per app process; manual Stop/Start stays available. */
     private boolean autoUpdateAttempted;
     private boolean outdatedNotified;
+    /** True after the app auto-requested Shizuku permission for the running-server update. */
+    private boolean permissionAutoRequested;
+    /** Set when Stop had to ask for Shizuku permission; the stop resumes on grant. */
+    private boolean pendingStopAfterGrant;
 
     private AiConfigStore configStore;
     private AiConfig config = new AiConfig("", "", "");
@@ -570,14 +574,8 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 return;
             }
             if (!state.permissionGranted) {
-                if (state.permanentlyDenied) {
-                    main.post(() -> {
-                        ShizukuServerManager.openManager(this);
-                        Toast.makeText(this, getString(R.string.state_denied_perm), Toast.LENGTH_LONG).show();
-                        refreshServerStatus();
-                    });
-                    return;
-                }
+                // Always offer the Shizuku dialog - a previous denial does not
+                // block asking again.
                 String reason = ShizukuServerManager.requestPermissionReason();
                 main.post(() -> {
                     if (reason == null) {
@@ -593,7 +591,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         });
     }
 
-    /** Bind the Shizuku user service and wait for the RPC port to open. */
+    /** Bind the Shizuku user service and wait for the RPC port. */
     private void bindAndStartServer(boolean fromUpdate) {
         main.post(() -> {
             serverStarting = true;
@@ -606,7 +604,9 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         if (userServiceConn == null) {
             userServiceConn = ShizukuServerManager.connection((ok, msg) -> main.post(() -> {
                 serverStarting = false;
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                if (!fromUpdate) {
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                }
                 refreshServerStatus();
             }), shellBinder);
         }
@@ -614,9 +614,12 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 (ok, msg) -> main.post(() -> {
                     serverStarting = false;
                     if (ok && fromUpdate) {
-                        serverUpdating = false;
-                        Toast.makeText(this, getString(R.string.server_updated), Toast.LENGTH_SHORT).show();
-                    } else if (!ok) {
+                        // Success here only means the port answers; the update
+                        // is complete once the new server version reports in.
+                        verifyServerUpdate();
+                        return;
+                    }
+                    if (!ok) {
                         serverUpdating = false;
                         Toast.makeText(this,
                                 fromUpdate ? getString(R.string.server_update_failed, msg) : msg,
@@ -635,27 +638,60 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 main.post(this::refreshServerStatus);
                 return;
             }
-            main.post(() -> {
-                serverStopping = true;
-                actionStartMs = SystemClock.elapsedRealtime();
-                refreshServerStatus();
-            });
-            IBinder bound = shellBinder.get();
-            if (bound != null && userServiceArgs != null && userServiceConn != null) {
-                ShizukuServerManager.stopServer(bound, userServiceArgs, userServiceConn,
-                        (ok, msg) -> main.post(() -> onServerStopped(ok, msg)));
-            } else {
-                if (userServiceArgs == null) {
-                    userServiceArgs = ShizukuServerManager.serviceArgs(this);
-                }
-                ShizukuServerManager.ensureBoundThenStop(this, userServiceArgs, shellBinder,
-                        (ok, msg) -> main.post(() -> onServerStopped(ok, msg)));
+            boolean binderAlive = false;
+            boolean granted = false;
+            try {
+                binderAlive = ShizukuServerManager.isBinderAlive();
+                granted = binderAlive && ShizukuServerManager.hasPermission();
+            } catch (Throwable ignored) {
             }
+            if (!binderAlive) {
+                main.post(() -> {
+                    if (ShizukuServerManager.openManager(this)) {
+                        Toast.makeText(this, getString(R.string.start_shizuku_first), Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this, getString(R.string.open_failed), Toast.LENGTH_LONG).show();
+                    }
+                    refreshServerStatus();
+                });
+                return;
+            }
+            if (!granted) {
+                // Stopping needs Shizuku; ask now and resume the stop on grant.
+                pendingStopAfterGrant = true;
+                String reason = ShizukuServerManager.requestPermissionReason();
+                main.post(() -> Toast.makeText(this, reason == null
+                                ? getString(R.string.perm_sent_stop)
+                                : getString(R.string.perm_failed, reason),
+                        Toast.LENGTH_LONG).show());
+                return;
+            }
+            performStopServer();
         });
+    }
+
+    /**
+     * Stops the RPC server through a fresh Shizuku bind: the bind starts (or
+     * attaches to) the service, whose startup also reclaims the port from
+     * leftover daemons, and then the destroy exits it - so the port really
+     * ends up free even when an old daemon held it.
+     */
+    private void performStopServer() {
+        main.post(() -> {
+            serverStopping = true;
+            actionStartMs = SystemClock.elapsedRealtime();
+            refreshServerStatus();
+        });
+        if (userServiceArgs == null) {
+            userServiceArgs = ShizukuServerManager.serviceArgs(this);
+        }
+        ShizukuServerManager.ensureBoundThenStop(this, userServiceArgs, shellBinder,
+                (ok, msg) -> main.post(() -> onServerStopped(ok, msg)));
     }
 
     private void onServerStopped(boolean ok, String msg) {
         serverStopping = false;
+        pendingStopAfterGrant = false;
         if (ok) {
             shellBinder.set(null);
             userServiceConn = null;
@@ -748,9 +784,13 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     /**
      * The running server process can predate this app build (leftover daemon
      * or manual app_process). Old servers answer "unknown method: guideTask",
-     * so replace them automatically via Shizuku - unless a task is running
-     * (a restart would kill it) or Shizuku cannot restart it (say so in the
-     * status line instead).
+     * so replace them automatically via Shizuku.
+     *
+     * <p>Starting the new server is enough: its startup hunts down and kills
+     * whatever still holds the RPC port (see Main.ensurePortFree). A
+     * stop-then-start dance is not needed and used to strand the old daemon
+     * when the destroy landed before startup finished. If Shizuku permission
+     * is missing, ask for it right away - the update resumes on grant.
      */
     private void maybeAutoUpdateServer() {
         if (serverUpdating || serverStarting || serverStopping || autoUpdateAttempted) {
@@ -759,51 +799,80 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         if (anyTaskRunning()) {
             return;
         }
-        autoUpdateAttempted = true;
         io.execute(() -> {
-            boolean canUpdate;
+            boolean binderAlive = false;
+            boolean granted = false;
             try {
-                canUpdate = ShizukuServerManager.isBinderAlive() && ShizukuServerManager.hasPermission();
+                binderAlive = ShizukuServerManager.isBinderAlive();
+                granted = binderAlive && ShizukuServerManager.hasPermission();
             } catch (Throwable ignored) {
-                canUpdate = false;
             }
-            if (!canUpdate) {
-                main.post(this::notifyOutdatedServer);
+            if (!granted) {
+                if (binderAlive && !permissionAutoRequested) {
+                    permissionAutoRequested = true;
+                    String reason = ShizukuServerManager.requestPermissionReason();
+                    main.post(() -> Toast.makeText(this, reason == null
+                                    ? getString(R.string.perm_sent_update)
+                                    : getString(R.string.perm_failed, reason),
+                            Toast.LENGTH_LONG).show());
+                } else {
+                    main.post(this::notifyOutdatedServer);
+                }
                 return;
             }
+            autoUpdateAttempted = true;
             main.post(() -> {
                 serverUpdating = true;
-                serverStopping = true;
                 actionStartMs = SystemClock.elapsedRealtime();
                 Toast.makeText(this, getString(R.string.server_updating), Toast.LENGTH_LONG).show();
                 refreshServerStatus();
             });
-            IBinder bound = shellBinder.get();
-            if (bound != null && userServiceArgs != null && userServiceConn != null) {
-                ShizukuServerManager.stopServer(bound, userServiceArgs, userServiceConn,
-                        (ok, msg) -> main.post(() -> onOldServerStopped(ok, msg)));
-            } else {
-                if (userServiceArgs == null) {
-                    userServiceArgs = ShizukuServerManager.serviceArgs(this);
-                }
-                ShizukuServerManager.ensureBoundThenStop(this, userServiceArgs, shellBinder,
-                        (ok, msg) -> main.post(() -> onOldServerStopped(ok, msg)));
-            }
+            bindAndStartServer(true);
         });
     }
 
-    private void onOldServerStopped(boolean ok, String msg) {
-        serverStopping = false;
-        if (!ok) {
-            serverUpdating = false;
-            Toast.makeText(this, getString(R.string.server_update_failed, msg), Toast.LENGTH_LONG).show();
-            refreshServerStatus();
-            return;
-        }
-        shellBinder.set(null);
-        userServiceConn = null;
-        markAllTasksStopped();
-        bindAndStartServer(true);
+    /**
+     * The new server reclaims the port from any leftover daemon while
+     * starting, so the reliable success signal is the RPC version it
+     * reports. Poll until it answers with a supported version.
+     */
+    private void verifyServerUpdate() {
+        io.execute(() -> {
+            long deadline = SystemClock.elapsedRealtime() + 15000;
+            boolean updated = false;
+            while (SystemClock.elapsedRealtime() < deadline) {
+                final AtomicReference<ShizukuServerManager.OcrStatus> box = new AtomicReference<>();
+                final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                ShizukuServerManager.queryOcrStatus(ocr -> {
+                    box.set(ocr);
+                    latch.countDown();
+                });
+                try {
+                    latch.await(6, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    break;
+                }
+                ShizukuServerManager.OcrStatus ocr = box.get();
+                if (ocr != null && ocr.serverUp
+                        && ocr.serverVersion >= ShizukuServerManager.MIN_SERVER_VERSION) {
+                    updated = true;
+                    break;
+                }
+                try {
+                    Thread.sleep(900);
+                } catch (InterruptedException ignored) {
+                    break;
+                }
+            }
+            boolean ok = updated;
+            main.post(() -> {
+                serverUpdating = false;
+                Toast.makeText(this,
+                        getString(ok ? R.string.server_updated : R.string.server_update_stalled),
+                        Toast.LENGTH_LONG).show();
+                refreshServerStatus();
+            });
+        });
     }
 
     private void notifyOutdatedServer() {
@@ -861,13 +930,8 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             serverStatus.setText(getString(R.string.state_not_running));
             primary = getString(R.string.server_open);
         } else if (!state.permissionGranted) {
-            if (state.permanentlyDenied) {
-                serverStatus.setText(getString(R.string.state_denied_perm));
-                primary = getString(R.string.server_open);
-            } else {
-                serverStatus.setText(getString(R.string.state_denied_temp));
-                primary = getString(R.string.server_grant);
-            }
+            serverStatus.setText(getString(R.string.state_denied_temp));
+            primary = getString(R.string.server_grant);
         } else {
             serverStatus.setText(getString(R.string.server_stopped));
             primary = getString(R.string.server_start);
@@ -977,9 +1041,19 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             return;
         }
         if (grantResult == PackageManager.PERMISSION_GRANTED) {
+            // A grant unblocks the outdated-server auto-update and any stop
+            // that was waiting for permission.
+            autoUpdateAttempted = false;
             deployOcrAsync();
-            onPrimaryButton();
+            if (pendingStopAfterGrant) {
+                pendingStopAfterGrant = false;
+                io.execute(this::performStopServer);
+                return;
+            }
+            refreshServerStatus();
         } else {
+            pendingStopAfterGrant = false;
+            Toast.makeText(this, getString(R.string.perm_denied), Toast.LENGTH_LONG).show();
             refreshServerStatus();
         }
     }

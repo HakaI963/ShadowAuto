@@ -28,7 +28,16 @@ import com.raphele.tessocr.TessAssets;
 public class ShellUserService extends Binder {
     private static final String TAG = "ShellUserService";
     private static final int TRANSACTION_DESTROY = 16777115;
+    /**
+     * Guards {@link #startupComplete}. A DESTROY request can arrive right
+     * after the app binds (much faster than {@link Main} finishes reclaiming
+     * the RPC port), so the destroying thread waits here until startup has
+     * killed leftover port holders. Otherwise a stale daemon survives the
+     * stop request and keeps answering on the port.
+     */
+    private static final Object STARTUP_LOCK = new Object();
     private static volatile boolean started;
+    private static boolean startupComplete;
 
     public ShellUserService() {
         start(null);
@@ -72,6 +81,36 @@ public class ShellUserService extends Binder {
         thread.start();
     }
 
+    /**
+     * Called by {@link Main} once the RPC port has been reclaimed (stale
+     * port holders killed). A pending DESTROY may then exit this process
+     * without leaving an old server behind on the port.
+     */
+    public static void notifyStartupComplete() {
+        synchronized (STARTUP_LOCK) {
+            startupComplete = true;
+            STARTUP_LOCK.notifyAll();
+        }
+    }
+
+    private static boolean startupWait(long timeoutMs) {
+        synchronized (STARTUP_LOCK) {
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            while (!startupComplete) {
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    return false;
+                }
+                try {
+                    STARTUP_LOCK.wait(Math.min(250, remaining));
+                } catch (InterruptedException e) {
+                    return startupComplete;
+                }
+            }
+            return true;
+        }
+    }
+
     @Override
     protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws android.os.RemoteException {
         if (code == TRANSACTION_DESTROY) {
@@ -81,8 +120,11 @@ public class ShellUserService extends Binder {
             }
             Main.shutdown();
             new Thread(() -> {
+                // Let Main reclaim the port first (kills leftover daemons),
+                // bounded so a stuck startup can never hang the destroy.
+                startupWait(15000);
                 try {
-                    Thread.sleep(300);
+                    Thread.sleep(250);
                 } catch (InterruptedException ignored) {
                 }
                 try {

@@ -21,7 +21,7 @@ final class RpcServer {
      * running server, so an old leftover process can never keep answering
      * with "unknown method".
      */
-    static final int SERVER_VERSION = 14;
+    static final int SERVER_VERSION = 15;
 
     private final int port;
     private final AutomationEngine engine;
