@@ -1,6 +1,6 @@
 # Android Virtual Display and AI Background Automation
 
-ShadowAuto is built around one idea: run a real Android app on a background virtual screen, let an AI model inspect that screen, choose the next action through tool calls, and inject touch, key, scroll, and text input events into the virtual display instead of the physical screen.
+Raphele is built around one idea: run a real Android app on a background virtual screen, let an AI model inspect that screen, choose the next action through tool calls, and inject touch, key, scroll, and text input events into the virtual display instead of the physical screen.
 
 This is different from a coordinate script. The target app does not need to occupy the main display, and the automation loop does not depend on fixed screen positions. The controller app only collects the user goal, shows the virtual screen stream, and displays progress logs. The actual perception, reasoning, and execution all happen inside the shell process.
 
@@ -13,7 +13,7 @@ TangoADB/WebUSB is only used as a convenient browser launcher. It is not the cor
 
 ## Architecture
 
-ShadowAuto has three main modules:
+Raphele has three main modules:
 
 - `android-shell`: a background shell process started by `adb shell` and `app_process`. It creates the VirtualDisplay, launches target apps, reads UI and OCR data, calls the AI model, executes tool calls, and streams the virtual display.
 - `controller-app`: the Android controller app. It configures the model, accepts user goals, shows the virtual screen, displays logs, and stops tasks.
@@ -23,7 +23,7 @@ High-level flow:
 
 ```mermaid
 flowchart TD
-    A["User enters a goal in ShadowAuto"] --> B["JSON-RPC startTask"]
+    A["User enters a goal in Raphele"] --> B["JSON-RPC startTask"]
     B --> C["android-shell background process"]
     C --> D["Create VirtualDisplay"]
     D --> E["Launch target app with am start --display"]
@@ -46,10 +46,10 @@ A normal Android app is constrained by the app sandbox. It cannot reliably acces
 - Reading windows across displays with UiAutomation.
 - Moving the IME to the virtual display.
 
-ShadowAuto puts the automation engine in a shell process:
+Raphele puts the automation engine in a shell process:
 
 ```sh
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
 ```
 
 The process runs with shell permissions, which is enough for Android 10 and later. Root is not required.
@@ -66,7 +66,7 @@ The controller app talks to it through local TCP JSON-RPC. The port is not meant
 
 An Android `VirtualDisplay` is an independent display backed by a `Surface`. If an app is launched onto that display, the system renders that app into the supplied surface.
 
-ShadowAuto creates the display with public flags plus hidden flags when available:
+Raphele creates the display with public flags plus hidden flags when available:
 
 ```java
 int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
@@ -77,7 +77,7 @@ int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
         | hiddenFlag("VIRTUAL_DISPLAY_FLAG_TRUSTED");
 
 VirtualDisplay display = manager.createVirtualDisplay(
-        "ShadowAuto",
+        "Raphele",
         width,
         height,
         dpi,
@@ -86,7 +86,7 @@ VirtualDisplay display = manager.createVirtualDisplay(
 );
 ```
 
-This code lives in `android-shell/src/main/java/com/silentauto/shell/VirtualDisplaySession.java`.
+This code lives in `android-shell/src/main/java/com/raphele/shell/VirtualDisplaySession.java`.
 
 The important behavior:
 
@@ -126,7 +126,7 @@ new ProcessBuilder("sh", "-c", command)
         .start();
 ```
 
-Before launching, ShadowAuto lists installed apps that have a launcher intent:
+Before launching, Raphele lists installed apps that have a launcher intent:
 
 ```java
 for (ApplicationInfo app : pm.getInstalledApplications(PackageManager.GET_META_DATA)) {
@@ -147,7 +147,7 @@ The simplest screen preview design is repeated screenshots: capture a bitmap, en
 - Bitmap encoding and decoding are expensive.
 - Latency is high and frame rate is low.
 
-ShadowAuto streams video instead. The VirtualDisplay renders directly into a `MediaCodec` encoder input surface. The encoder outputs H.264 config and samples, and the controller app decodes them into a `TextureView`.
+Raphele streams video instead. The VirtualDisplay renders directly into a `MediaCodec` encoder input surface. The encoder outputs H.264 config and samples, and the controller app decodes them into a `TextureView`.
 
 Encoder setup:
 
@@ -201,7 +201,7 @@ This keeps bandwidth and CPU lower than image delivery, and the preview feels mu
 
 ## UI observation with UiAutomation
 
-The AI needs to know what is currently on the virtual screen. ShadowAuto uses `UiAutomation` to read accessibility windows and nodes.
+The AI needs to know what is currently on the virtual screen. Raphele uses `UiAutomation` to read accessibility windows and nodes.
 
 The important detail is display filtering. On newer Android versions, the code calls `getWindowsOnAllDisplays()` and picks the target display:
 
@@ -215,7 +215,7 @@ List<AccessibilityWindowInfo> result = all.get(displayId);
 
 This avoids a common failure mode: the target app is running on the virtual display, but the UI dump accidentally reads the main display.
 
-ShadowAuto returns two UI dump modes:
+Raphele returns two UI dump modes:
 
 - `simple`: a compact, model-friendly layout with actionable targets, editable inputs, labels, bounds, and indexes.
 - `full`: the complete accessibility tree for diagnosis or difficult pages.
@@ -240,7 +240,7 @@ The result explicitly marks the coordinate space:
 
 Some apps do not expose useful accessibility nodes. Self-rendered pages, complex e-commerce views, maps, and security pages can appear visually rich while the UI tree is empty or incomplete.
 
-For those cases ShadowAuto exposes a `get_screen_ocr` tool. The shell captures the current virtual display frame, runs Tesseract OCR, and returns text, confidence, and bounding boxes.
+For those cases Raphele exposes a `get_screen_ocr` tool. The shell captures the current virtual display frame, runs Tesseract OCR, and returns text, confidence, and bounding boxes.
 
 Frame capture uses the virtual display itself. It temporarily switches the VirtualDisplay surface to an `ImageReader`, captures the latest image, and restores the video surface:
 
@@ -288,7 +288,7 @@ When accessibility is sparse, the model can use OCR text and bounds to continue 
 
 Input is the most fragile part of virtual display automation. If the event does not carry the target display id, it may land on the main screen.
 
-ShadowAuto reflects `InputEvent#setDisplayId()` and then calls `InputManager#injectInputEvent()`:
+Raphele reflects `InputEvent#setDisplayId()` and then calls `InputManager#injectInputEvent()`:
 
 ```java
 private boolean send(int displayId, InputEvent event) throws Exception {
@@ -320,7 +320,7 @@ boolean key(int displayId, int keyCode) throws Exception {
 }
 ```
 
-For text input, ShadowAuto uses a layered strategy:
+For text input, Raphele uses a layered strategy:
 
 1. Use Accessibility `ACTION_SET_TEXT` when possible.
 2. If that fails, set the clipboard and paste.
@@ -332,7 +332,7 @@ This handles Chinese input, search fields, normal `EditText`, and some custom in
 
 If the user taps an input inside the virtual display but the soft keyboard appears on the physical display, search and submit actions become unreliable.
 
-ShadowAuto attempts to set the display IME policy when the virtual display is created:
+Raphele attempts to set the display IME policy when the virtual display is created:
 
 ```java
 this.previousImePolicy = windowManager.getDisplayImePolicy(displayId);
@@ -407,7 +407,7 @@ The final tool call looks like:
 
 ## The ReAct loop
 
-ShadowAuto runs a ReAct-style loop:
+Raphele runs a ReAct-style loop:
 
 1. Observe the current UI with a simple dump.
 2. Ask the model to choose exactly one tool.
@@ -473,7 +473,7 @@ event.add("params", params);
 Logs are visible in the controller app and in logcat:
 
 ```sh
-adb logcat -v time -s ShadowAutoShell
+adb logcat -v time -s RapheleShell
 ```
 
 For debugging, layout dumps and OCR results are also written to logcat so a developer can verify what the AI actually saw.
@@ -489,7 +489,7 @@ For debugging, layout dumps and OCR results are also written to logcat so a deve
 
 `syncWebLauncherArtifacts` copies these files into `web-launcher/static`:
 
-- `silent-shell.apk`
+- `raphele-shell.apk`
 - `controller-app.apk`
 - Tesseract OCR native libraries
 - Tesseract traineddata (chi_sim+eng)
@@ -499,22 +499,22 @@ For debugging, layout dumps and OCR results are also written to logcat so a deve
 The recommended path is the online launcher:
 
 ```text
-https://android-notes.github.io/ShadowAuto/
+https://android-notes.github.io/Raphele/
 ```
 
-Click `Start ShadowAuto Assistant`, select the Android device, and allow the prompts on the phone.
+Click `Start Raphele Assistant`, select the Android device, and allow the prompts on the phone.
 
 Manual ADB startup:
 
 ```sh
-adb push web-launcher/static/silent-shell.apk /data/local/tmp/silent-shell.apk
-adb push web-launcher/static/ocr/. /data/local/tmp/shadowauto/ocr/
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
+adb push web-launcher/static/raphele-shell.apk /data/local/tmp/raphele-shell.apk
+adb push web-launcher/static/ocr/. /data/local/tmp/raphele/ocr/
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
 ```
 
 ### 3. Configure the AI model
 
-Open the ShadowAuto app and set:
+Open the Raphele app and set:
 
 - API key
 - API URL, such as `https://api.deepseek.com` or another OpenAI-compatible endpoint
@@ -577,7 +577,7 @@ Common causes:
 - The page blocks Accessibility text setting.
 - Parallel tasks overwrite each other's clipboard text.
 
-ShadowAuto tries Accessibility text setting first, then clipboard paste, then key events.
+Raphele tries Accessibility text setting first, then clipboard paste, then key events.
 
 ### The virtual screen becomes black
 

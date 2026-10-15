@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.silentauto.tessocr"
+    namespace = "com.raphele.tessocr"
     compileSdk = 36
     // Pinned so AGP resolves a matching NDK (source of libc++_shared.so).
     // No CMake build in this module.

@@ -1,10 +1,10 @@
-# 隐控 ShadowAuto
+# 隐控 Raphele
 
 [English](README.md) | 中文
 
-隐控 ShadowAuto 是一个类似豆包手机的 Android 开源原型，支持任意 Android 10 及以上设备，同样可以实现 Android 手机后台静默自动化。它通过 `adb shell` 和 `app_process` 启动 AI 驱动的 shell 进程，把真实 App 打开在独立 VirtualDisplay 中运行；用户主屏幕可以继续正常使用，自动化任务则在后台虚拟屏里静默执行。
+隐控 Raphele 是一个类似豆包手机的 Android 开源原型，支持任意 Android 10 及以上设备，同样可以实现 Android 手机后台静默自动化。它通过 `adb shell` 和 `app_process` 启动 AI 驱动的 shell 进程，把真实 App 打开在独立 VirtualDisplay 中运行；用户主屏幕可以继续正常使用，自动化任务则在后台虚拟屏里静默执行。
 
-ShadowAuto 的重点不是简单脚本点击，而是让 AI 具备类似手机助理的屏幕理解和操作能力：shell 进程可以读取虚拟屏上的 UiAutomation UI 节点树，也可以在无障碍节点缺失、自绘页面或复杂业务页面中调用离线 OCR 读取屏幕文字和坐标，再通过 InputManager 把触摸、按键和输入事件注入到指定 display。
+Raphele 的重点不是简单脚本点击，而是让 AI 具备类似手机助理的屏幕理解和操作能力：shell 进程可以读取虚拟屏上的 UiAutomation UI 节点树，也可以在无障碍节点缺失、自绘页面或复杂业务页面中调用离线 OCR 读取屏幕文字和坐标，再通过 InputManager 把触摸、按键和输入事件注入到指定 display。
 
 ## 核心能力
 
@@ -18,9 +18,9 @@ ShadowAuto 的重点不是简单脚本点击，而是让 AI 具备类似手机�
 
 ## 演示视频
 
-<video src="shadowauto.mp4" controls="controls" style="max-width: 100%;"></video>
+<video src="raphele.mp4" controls="controls" style="max-width: 100%;"></video>
 
-如果当前页面不支持直接播放视频，可以打开 [shadowauto.mp4](shadowauto.mp4) 查看。
+如果当前页面不支持直接播放视频，可以打开 [raphele.mp4](raphele.mp4) 查看。
 
 ## 技术文章
 
@@ -69,7 +69,7 @@ adb install -r controller-app/build/outputs/apk/debug/controller-app-debug.apk
 
 ### 方式一：浏览器启动器
 
-线上启动器：[https://android-notes.github.io/ShadowAuto/](https://android-notes.github.io/ShadowAuto/)
+线上启动器：[https://android-notes.github.io/Raphele/](https://android-notes.github.io/Raphele/)
 
 连接前请先完成手机准备：
 
@@ -100,19 +100,19 @@ adb kill-server
 
 ```sh
 ./gradlew :android-shell:syncWebLauncherArtifacts
-adb push web-launcher/static/silent-shell.apk /data/local/tmp/silent-shell.apk
-adb shell "rm -rf /data/local/tmp/shadowauto/ocr && mkdir -p /data/local/tmp/shadowauto/ocr"
-adb push web-launcher/static/ocr/. /data/local/tmp/shadowauto/ocr/
+adb push web-launcher/static/raphele-shell.apk /data/local/tmp/raphele-shell.apk
+adb shell "rm -rf /data/local/tmp/raphele/ocr && mkdir -p /data/local/tmp/raphele/ocr"
+adb push web-launcher/static/ocr/. /data/local/tmp/raphele/ocr/
 adb shell "if [ -f /data/local/tmp/silent-auto.pid ]; then kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data/local/tmp/silent-auto.pid; fi"
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo \$! >/data/local/tmp/silent-auto.pid"
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo \$! >/data/local/tmp/silent-auto.pid"
 ```
 
-OCR 文件是 `get_screen_ocr` tool call 必需的。只推 `silent-shell.apk` 时，普通自动化可以启动，但遇到无障碍节点缺失的页面时 OCR 兜底会失败。
+OCR 文件是 `get_screen_ocr` tool call 必需的。只推 `raphele-shell.apk` 时，普通自动化可以启动，但遇到无障碍节点缺失的页面时 OCR 兜底会失败。
 
-如果启动后 logcat 出现 `ClassNotFoundException: com.silentauto.shell.Main`，通常是 `silent-shell.apk` 没有成功推送到设备。先检查：
+如果启动后 logcat 出现 `ClassNotFoundException: com.raphele.shell.Main`，通常是 `raphele-shell.apk` 没有成功推送到设备。先检查：
 
 ```sh
-adb shell "ls -lh /data/local/tmp/silent-shell.apk"
+adb shell "ls -lh /data/local/tmp/raphele-shell.apk"
 ```
 
 连接多个设备时，建议所有命令都加 `-s <serial>`，例如 `adb -s emulator-5554 push ...`。
@@ -120,7 +120,7 @@ adb shell "ls -lh /data/local/tmp/silent-shell.apk"
 查看 shell 日志：
 
 ```sh
-adb logcat -v time -s ShadowAutoShell
+adb logcat -v time -s RapheleShell
 ```
 
 停止 shell 进程：
@@ -168,7 +168,7 @@ adb shell "kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data
 
 该任务会下载 `chi_sim` + `eng` 训练数据。生成文件位于 `tess-ocr/TessData`，该目录不会提交到 git。
 
-Java 入口是 `com.silentauto.tessocr.TessOcrEngine`，调用 `init()` 后可通过 `recognize(Bitmap)` 获取文本、置信度和坐标框。运行时文件会复制到 `android-shell/build/ocr-runtime`，并由浏览器启动器上传到 `/data/local/tmp/shadowauto/ocr`。
+Java 入口是 `com.raphele.tessocr.TessOcrEngine`，调用 `init()` 后可通过 `recognize(Bitmap)` 获取文本、置信度和坐标框。运行时文件会复制到 `android-shell/build/ocr-runtime`，并由浏览器启动器上传到 `/data/local/tmp/raphele/ocr`。
 
 ## JSON-RPC 概览
 
@@ -207,4 +207,4 @@ node scripts/emulator-mock-ai-test.mjs
 
 ## 开源协议
 
-隐控 ShadowAuto 使用 [Apache License 2.0](LICENSE) 开源。
+隐控 Raphele 使用 [Apache License 2.0](LICENSE) 开源。

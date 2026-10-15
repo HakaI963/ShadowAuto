@@ -3,12 +3,12 @@ import AdbWebCredentialStore from '@yume-chan/adb-credential-web';
 import { AdbDaemonWebUsbDevice, AdbDaemonWebUsbDeviceManager } from '@yume-chan/adb-daemon-webusb';
 import type { MaybeConsumable, ReadableStream as AdbReadableStream } from '@yume-chan/stream-extra';
 
-const credentialStore = new AdbWebCredentialStore('ShadowAuto');
-const devicePath = '/data/local/tmp/silent-shell.apk';
-const controllerPath = '/data/local/tmp/shadowauto-controller.apk';
-const controllerComponent = 'com.silentauto.controller/.MainActivity';
+const credentialStore = new AdbWebCredentialStore('Raphele');
+const devicePath = '/data/local/tmp/raphele-shell.apk';
+const controllerPath = '/data/local/tmp/raphele-controller.apk';
+const controllerComponent = 'com.raphele.controller/.MainActivity';
 const pidPath = '/data/local/tmp/silent-auto.pid';
-const ocrRoot = '/data/local/tmp/shadowauto/ocr';
+const ocrRoot = '/data/local/tmp/raphele/ocr';
 const ocrFiles = [
   'lib/arm64-v8a/libc++_shared.so',
   'lib/arm64-v8a/libjpeg.so',
@@ -50,7 +50,7 @@ export async function launchShell(report: LaunchProgressCallback = () => {}) {
   report({ action: 'connectDevice', name: selected.serial });
   const adb = await connect(selected);
   try {
-    await push(adb, assetUrl('silent-shell.apk'), devicePath, 'silent-shell.apk', report);
+    await push(adb, assetUrl('raphele-shell.apk'), devicePath, 'raphele-shell.apk', report);
     await pushOcrRuntime(adb, report);
     report({ action: 'startShell' });
     await shell(adb, startCommand());
@@ -145,7 +145,7 @@ async function shell(adb: Adb, command: string) {
 
 function startCommand() {
   const env = `CLASSPATH=${quote(devicePath)}`;
-  const main = 'app_process /system/bin com.silentauto.shell.Main --port=43110';
+  const main = 'app_process /system/bin com.raphele.shell.Main --port=43110';
   return `${env} nohup sh -c ${quote(`exec ${main}`)} >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo $! > ${pidPath}; echo started`;
 }
 

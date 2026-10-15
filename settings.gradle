@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ShadowAutoSuite"
+rootProject.name = "RapheleSuite"
 include ":android-stubs"
 include ":tess-ocr"
 include ":android-shell"

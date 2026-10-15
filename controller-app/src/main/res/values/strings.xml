@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ShadowAuto</string>
+    <string name="app_name">Raphele</string>
     <string name="config_title">AI Configuration</string>
     <string name="model_service">Model Service</string>
     <string name="ai_badge">AI</string>
@@ -19,7 +19,7 @@
     <string name="test_failed">Test failed: %1$s</string>
     <string name="back">Back</string>
     <string name="close">Close</string>
-    <string name="main_title">ShadowAuto</string>
+    <string name="main_title">Raphele</string>
     <string name="stop_all_content_description">Stop all tasks</string>
     <string name="settings_content_description">Settings</string>
     <string name="help_content_description">Help</string>
@@ -69,6 +69,8 @@
     <string name="ocr_fixed">OCR redeployed, rechecking…</string>
     <string name="task_goal_hint">Use Meituan Waimai to order me a grande Starbucks vanilla latte</string>
     <string name="guide_hint">Tell it what to do next, mid-task…</string>
+    <string name="guide_hint_live">Send a command: open WhatsApp, scroll down, tap search…</string>
+    <string name="live">Live</string>
     <string name="guide_send">Send</string>
     <string name="guide_sent">Guide sent — applies from the next step</string>
     <string name="guide_outdated_hint">shell server is outdated; tap Stop server, then Start server</string>
@@ -78,8 +80,8 @@
     <string name="stop">Stop</string>
     <string name="starting">Starting</string>
     <string name="screen_preview_title">Virtual screen</string>
-    <string name="keep_alive_channel">ShadowAuto keep-alive</string>
-    <string name="keep_alive_title">ShadowAuto is ready</string>
+    <string name="keep_alive_channel">Raphele keep-alive</string>
+    <string name="keep_alive_title">Raphele is ready</string>
     <string name="keep_alive_text">Keeping the controller available for automation tasks</string>
     <string name="help_title">Help</string>
     <string name="help_usage_title">How to use</string>

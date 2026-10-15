@@ -7,7 +7,7 @@ const port = 43110;
 const mockPort = 18180;
 const apk = 'android-shell/build/outputs/apk/debug/android-shell-debug.apk';
 const pidPath = '/data/local/tmp/silent-auto.pid';
-const deviceApk = '/data/local/tmp/silent-shell.apk';
+const deviceApk = '/data/local/tmp/raphele-shell.apk';
 const taskId = 'test-1';
 
 function run(command, args, options = {}) {
@@ -182,7 +182,7 @@ async function waitForShell() {
 async function main() {
   run('./gradlew', [':android-shell:assembleDebug'], { stdio: 'inherit' });
   adb('push', apk, deviceApk);
-  adb('shell', `if [ -f ${pidPath} ]; then kill $(cat ${pidPath}) 2>/dev/null; rm -f ${pidPath}; fi; CLASSPATH=${deviceApk} nohup setsid app_process /system/bin com.silentauto.shell.Main --port=${port} >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo $! >${pidPath}`);
+  adb('shell', `if [ -f ${pidPath} ]; then kill $(cat ${pidPath}) 2>/dev/null; rm -f ${pidPath}; fi; CLASSPATH=${deviceApk} nohup setsid app_process /system/bin com.raphele.shell.Main --port=${port} >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo $! >${pidPath}`);
   adb('forward', `tcp:${port}`, `tcp:${port}`);
   await waitForShell();
 

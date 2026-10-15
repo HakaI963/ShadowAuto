@@ -1,10 +1,10 @@
-# ShadowAuto
+# Raphele
 
 English | [中文](README.zh-CN.md)
 
-ShadowAuto is an open-source Android prototype similar to Doubao Phone. It supports any Android 10 or later device and can likewise implement background silent automation on Android phones. It starts an AI-driven shell process through `adb shell` and `app_process`, launches real Android apps inside an isolated VirtualDisplay, and lets automation run quietly in the background while the physical screen remains usable.
+Raphele is an open-source Android prototype similar to Doubao Phone. It supports any Android 10 or later device and can likewise implement background silent automation on Android phones. It starts an AI-driven shell process through `adb shell` and `app_process`, launches real Android apps inside an isolated VirtualDisplay, and lets automation run quietly in the background while the physical screen remains usable.
 
-ShadowAuto is not just a click script. It gives the AI a phone-assistant-style loop for understanding and operating the screen: the shell process can read the UiAutomation UI node tree for the virtual display, fall back to offline OCR when accessibility nodes are missing or incomplete, and inject touch, key, clipboard, and text input events into the target display.
+Raphele is not just a click script. It gives the AI a phone-assistant-style loop for understanding and operating the screen: the shell process can read the UiAutomation UI node tree for the virtual display, fall back to offline OCR when accessibility nodes are missing or incomplete, and inject touch, key, clipboard, and text input events into the target display.
 
 The Chinese product name is **隐控**.
 
@@ -20,9 +20,9 @@ The Chinese product name is **隐控**.
 
 ## Demo Video
 
-<video src="shadowauto.mp4" controls="controls" style="max-width: 100%;"></video>
+<video src="raphele.mp4" controls="controls" style="max-width: 100%;"></video>
 
-If the current page cannot play the embedded video, open [shadowauto.mp4](shadowauto.mp4).
+If the current page cannot play the embedded video, open [raphele.mp4](raphele.mp4).
 
 ## Technical Deep Dive
 
@@ -71,7 +71,7 @@ adb install -r controller-app/build/outputs/apk/debug/controller-app-debug.apk
 
 ### Option 1: Browser Launcher
 
-Online launcher: [https://android-notes.github.io/ShadowAuto/](https://android-notes.github.io/ShadowAuto/)
+Online launcher: [https://android-notes.github.io/Raphele/](https://android-notes.github.io/Raphele/)
 
 Before connecting, prepare the phone:
 
@@ -79,7 +79,7 @@ Before connecting, prepare the phone:
 - Some Xiaomi phones also require USB debugging (Security settings).
 - On first connection, the phone may show an Allow USB debugging prompt; tap Allow on the phone.
 - When installing the controller app, tap Allow install if the phone shows an install prompt.
-- After installation, configure an API key in the ShadowAuto app before using phone automation.
+- After installation, configure an API key in the Raphele app before using phone automation.
 - Developer option references: [Xiaomi](https://jingyan.baidu.com/article/ce436649ca6c877773afd3e2.html), [Huawei](https://jingyan.baidu.com/article/a378c960e87118b3282830bc.html), [OPPO](https://jingyan.baidu.com/article/cb5d6105b0936a005d2fe052.html), [VIVO](https://jingyan.baidu.com/article/335530da406f4358cb41c3b4.html).
 
 You can also run it locally:
@@ -90,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL in Chrome, click **Start ShadowAuto Assistant**, select the Android device, and authorize ADB if Android asks.
+Open the printed local URL in Chrome, click **Start Raphele Assistant**, select the Android device, and authorize ADB if Android asks.
 
 If the browser reports that the device is already in use, close Android Studio and kill adb, then retry:
 
@@ -102,19 +102,19 @@ adb kill-server
 
 ```sh
 ./gradlew :android-shell:syncWebLauncherArtifacts
-adb push web-launcher/static/silent-shell.apk /data/local/tmp/silent-shell.apk
-adb shell "rm -rf /data/local/tmp/shadowauto/ocr && mkdir -p /data/local/tmp/shadowauto/ocr"
-adb push web-launcher/static/ocr/. /data/local/tmp/shadowauto/ocr/
+adb push web-launcher/static/raphele-shell.apk /data/local/tmp/raphele-shell.apk
+adb shell "rm -rf /data/local/tmp/raphele/ocr && mkdir -p /data/local/tmp/raphele/ocr"
+adb push web-launcher/static/ocr/. /data/local/tmp/raphele/ocr/
 adb shell "if [ -f /data/local/tmp/silent-auto.pid ]; then kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data/local/tmp/silent-auto.pid; fi"
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo \$! >/data/local/tmp/silent-auto.pid"
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null & echo \$! >/data/local/tmp/silent-auto.pid"
 ```
 
-The OCR files are required for the `get_screen_ocr` tool. If you only push `silent-shell.apk`, normal automation can start, but OCR fallback will fail when the target page has no accessibility nodes.
+The OCR files are required for the `get_screen_ocr` tool. If you only push `raphele-shell.apk`, normal automation can start, but OCR fallback will fail when the target page has no accessibility nodes.
 
-If logcat shows `ClassNotFoundException: com.silentauto.shell.Main` after startup, `silent-shell.apk` was usually not pushed to the device. Check it first:
+If logcat shows `ClassNotFoundException: com.raphele.shell.Main` after startup, `raphele-shell.apk` was usually not pushed to the device. Check it first:
 
 ```sh
-adb shell "ls -lh /data/local/tmp/silent-shell.apk"
+adb shell "ls -lh /data/local/tmp/raphele-shell.apk"
 ```
 
 When multiple devices are connected, add `-s <serial>` to every command, for example `adb -s emulator-5554 push ...`.
@@ -122,7 +122,7 @@ When multiple devices are connected, add `-s <serial>` to every command, for exa
 View shell logs:
 
 ```sh
-adb logcat -v time -s ShadowAutoShell
+adb logcat -v time -s RapheleShell
 ```
 
 Stop the shell process:
@@ -133,7 +133,7 @@ adb shell "kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data
 
 ## Use The Android App
 
-1. Launch ShadowAuto on the phone.
+1. Launch Raphele on the phone.
 2. On first launch, enter API Key, API URL, and model. The app can load available models after API Key and URL are entered.
 3. Tap the test button. If the model responds normally, the config is saved.
 4. Enter a goal, for example: `Use Meituan Waimai to order me a grande Starbucks vanilla latte`.
@@ -144,7 +144,7 @@ adb shell "kill \$(cat /data/local/tmp/silent-auto.pid) 2>/dev/null; rm -f /data
 
 ## Core Principle
 
-ShadowAuto uses a shell-owned ReAct-style automation loop:
+Raphele uses a shell-owned ReAct-style automation loop:
 
 1. The shell process starts under `adb shell` by `app_process`, enabling access to shell-level Android services and hidden APIs.
 2. For each automation task, the shell creates a VirtualDisplay and launches the target Android app on that display.
@@ -170,7 +170,7 @@ The `tess-ocr` module contains the Tesseract Android integration (Tesseract4Andr
 
 The prepare task downloads the `chi_sim` + `eng` traineddata files. Generated files live under `tess-ocr/TessData`; they are ignored by git.
 
-The Java entry point is `com.silentauto.tessocr.TessOcrEngine`. After `init()`, call `recognize(Bitmap)` to get text, confidence, and bounding boxes. Runtime files are copied to `android-shell/build/ocr-runtime` and uploaded to `/data/local/tmp/shadowauto/ocr` by the web launcher.
+The Java entry point is `com.raphele.tessocr.TessOcrEngine`. After `init()`, call `recognize(Bitmap)` to get text, confidence, and bounding boxes. Runtime files are copied to `android-shell/build/ocr-runtime` and uploaded to `/data/local/tmp/raphele/ocr` by the web launcher.
 
 ## JSON-RPC Overview
 
@@ -209,4 +209,4 @@ node scripts/emulator-mock-ai-test.mjs
 
 ## License
 
-ShadowAuto is licensed under the [Apache License 2.0](LICENSE).
+Raphele is licensed under the [Apache License 2.0](LICENSE).

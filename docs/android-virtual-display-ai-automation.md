@@ -2,7 +2,7 @@
 
 [English version](android-virtual-display-ai-automation.en.md)
 
-隐控 ShadowAuto 的核心目标是：让真实 Android 应用运行在后台虚拟屏中，由 AI 大模型读取屏幕状态、决定下一步动作，并把点击、输入、滚动等事件注入到这个虚拟屏，而不是用户正在使用的主屏幕。
+隐控 Raphele 的核心目标是：让真实 Android 应用运行在后台虚拟屏中，由 AI 大模型读取屏幕状态、决定下一步动作，并把点击、输入、滚动等事件注入到这个虚拟屏，而不是用户正在使用的主屏幕。
 
 这类架构和普通脚本点击最大的区别在于：它不依赖固定坐标，也不要求目标 App 出现在实体屏幕上。自动化任务运行在 `VirtualDisplay`，控制端 App 只负责输入目标、展示虚拟投屏和进度日志；真正的感知、推理和执行都在 shell 进程内完成。
 
@@ -15,7 +15,7 @@ TangoADB/WebUSB 只是浏览器里启动 shell 进程的一种分发方式，本
 
 ## 整体架构
 
-ShadowAuto 分为三个模块：
+Raphele 分为三个模块：
 
 - `android-shell`：通过 `adb shell` + `app_process` 启动的后台进程。负责创建虚拟屏、启动目标 App、读取 UI/OCR、调用大模型、执行 tool call、推送投屏视频流。
 - `controller-app`：用户手机上的控制端 App。负责配置大模型、输入自动化目标、显示虚拟投屏、显示日志、停止任务。
@@ -48,10 +48,10 @@ flowchart TD
 - 使用 `UiAutomation` 读取所有窗口。
 - 修改虚拟屏上的 IME 策略，让软键盘显示在指定 display。
 
-ShadowAuto 的做法是把自动化核心放到一个 shell 进程里运行：
+Raphele 的做法是把自动化核心放到一个 shell 进程里运行：
 
 ```sh
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
 ```
 
 这样进程以 shell 身份运行，可以在 Android 10 及以上设备上使用 shell 权限访问系统服务和部分 hidden API，不需要 root。
@@ -68,7 +68,7 @@ shell 进程启动后只监听本机回环地址：
 
 Android 的 `VirtualDisplay` 本质上是一个独立 display。只要给它一个渲染目标 `Surface`，系统就可以把应用画面绘制到这个 Surface 上。
 
-ShadowAuto 创建虚拟屏时使用了几类关键 flag：
+Raphele 创建虚拟屏时使用了几类关键 flag：
 
 ```java
 int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
@@ -79,7 +79,7 @@ int flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
         | hiddenFlag("VIRTUAL_DISPLAY_FLAG_TRUSTED");
 
 VirtualDisplay display = manager.createVirtualDisplay(
-        "ShadowAuto",
+        "Raphele",
         width,
         height,
         dpi,
@@ -88,7 +88,7 @@ VirtualDisplay display = manager.createVirtualDisplay(
 );
 ```
 
-这段逻辑位于 `android-shell/src/main/java/com/silentauto/shell/VirtualDisplaySession.java`。
+这段逻辑位于 `android-shell/src/main/java/com/raphele/shell/VirtualDisplaySession.java`。
 
 几个 flag 的作用可以简单理解为：
 
@@ -149,7 +149,7 @@ for (ApplicationInfo app : pm.getInstalledApplications(PackageManager.GET_META_D
 - 帧率低，操作反馈明显滞后。
 - 图片编码、Base64、解码都会带来额外延迟。
 
-ShadowAuto 现在采用更接近 scrcpy 的方式：让 `VirtualDisplay` 直接渲染到 `MediaCodec` 的输入 Surface，由系统硬件编码成 H.264，再把编码后的数据推给控制端 App。
+Raphele 现在采用更接近 scrcpy 的方式：让 `VirtualDisplay` 直接渲染到 `MediaCodec` 的输入 Surface，由系统硬件编码成 H.264，再把编码后的数据推给控制端 App。
 
 关键流程是：
 
@@ -212,7 +212,7 @@ decoder.start();
 
 AI 要做自动化，首先必须知道当前屏幕上有什么。
 
-ShadowAuto 使用 `UiAutomation` 读取无障碍窗口和节点，并且优先调用 Android 新版本支持的 `getWindowsOnAllDisplays()`，从所有 display 中筛选当前虚拟屏：
+Raphele 使用 `UiAutomation` 读取无障碍窗口和节点，并且优先调用 Android 新版本支持的 `getWindowsOnAllDisplays()`，从所有 display 中筛选当前虚拟屏：
 
 ```java
 Method method = UiAutomation.class.getMethod("getWindowsOnAllDisplays");
@@ -249,7 +249,7 @@ dump 返回两种模式：
 
 很多页面并不会暴露完整无障碍节点，例如自绘页面、复杂列表、部分电商页面、地图、支付安全页面等。此时 UI dump 可能为空，但屏幕上明明有文字。
 
-ShadowAuto 提供 `get_screen_ocr` tool。shell 会从虚拟屏抓取当前画面，调用 Tesseract OCR，返回文本、置信度和坐标框。
+Raphele 提供 `get_screen_ocr` tool。shell 会从虚拟屏抓取当前画面，调用 Tesseract OCR，返回文本、置信度和坐标框。
 
 截图路径不是从主屏截图，而是临时把 VirtualDisplay 的 Surface 切到 `ImageReader`：
 
@@ -297,7 +297,7 @@ OCR 结果会按 display-local 坐标返回：
 
 虚拟屏自动化最容易出错的地方是输入注入。如果不指定 display，点击和按键可能会落到主屏幕。
 
-ShadowAuto 通过反射调用 `InputEvent#setDisplayId()`，再使用 `InputManager#injectInputEvent()` 注入：
+Raphele 通过反射调用 `InputEvent#setDisplayId()`，再使用 `InputManager#injectInputEvent()` 注入：
 
 ```java
 private boolean send(int displayId, InputEvent event) throws Exception {
@@ -341,7 +341,7 @@ boolean key(int displayId, int keyCode) throws Exception {
 
 点击虚拟屏输入框后，如果 IME 仍显示在主屏，搜索、回车、输入都会变得不稳定。
 
-ShadowAuto 在创建虚拟屏后会尝试设置该 display 的 IME policy：
+Raphele 在创建虚拟屏后会尝试设置该 display 的 IME policy：
 
 ```java
 this.previousImePolicy = windowManager.getDisplayImePolicy(displayId);
@@ -355,7 +355,7 @@ this.localImeEnabled = windowManager.setDisplayImePolicy(
 
 ## AI 调用：流式 Chat Completions + tool call
 
-ShadowAuto 的大模型调用发生在 shell 进程内，而不是 controller-app 内。这样有两个好处：
+Raphele 的大模型调用发生在 shell 进程内，而不是 controller-app 内。这样有两个好处：
 
 - 自动化循环不用来回跨进程等待 App 再请求 AI，链路更短。
 - 模型输出 token、tool call、日志和投屏可以统一通过 shell 推送到控制端。
@@ -424,7 +424,7 @@ builder.arguments.append(fn.get("arguments").getAsString());
 
 ## ReAct 自动化循环
 
-ShadowAuto 的自动化本质上是一个 ReAct Loop：
+Raphele 的自动化本质上是一个 ReAct Loop：
 
 1. Observe：读取当前 UI simple dump。
 2. Think：把用户目标、历史动作、UI 状态、工具列表交给大模型。
@@ -491,7 +491,7 @@ event.add("params", params);
 日志可以在 App 内看到，也可以通过 logcat 查看：
 
 ```sh
-adb logcat -v time -s ShadowAutoShell
+adb logcat -v time -s RapheleShell
 ```
 
 调试 UI dump 或 OCR 时，shell 也会把布局和识别结果写入 logcat，方便人工确认模型到底看到了什么。
@@ -507,7 +507,7 @@ adb logcat -v time -s ShadowAutoShell
 
 `syncWebLauncherArtifacts` 会把以下文件同步到 `web-launcher/static`：
 
-- `silent-shell.apk`
+- `raphele-shell.apk`
 - `controller-app.apk`
 - Tesseract OCR native library
 - Tesseract 训练数据（chi_sim+eng）
@@ -517,7 +517,7 @@ adb logcat -v time -s ShadowAutoShell
 推荐使用在线启动器：
 
 ```text
-https://android-notes.github.io/ShadowAuto/
+https://android-notes.github.io/Raphele/
 ```
 
 点击“启动隐控Assistant”，选择设备，浏览器会自动上传文件并执行 `app_process` 启动命令。
@@ -525,9 +525,9 @@ https://android-notes.github.io/ShadowAuto/
 如果需要手动 ADB：
 
 ```sh
-adb push web-launcher/static/silent-shell.apk /data/local/tmp/silent-shell.apk
-adb push web-launcher/static/ocr/. /data/local/tmp/shadowauto/ocr/
-adb shell "CLASSPATH=/data/local/tmp/silent-shell.apk nohup sh -c 'exec app_process /system/bin com.silentauto.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
+adb push web-launcher/static/raphele-shell.apk /data/local/tmp/raphele-shell.apk
+adb push web-launcher/static/ocr/. /data/local/tmp/raphele/ocr/
+adb shell "CLASSPATH=/data/local/tmp/raphele-shell.apk nohup sh -c 'exec app_process /system/bin com.raphele.shell.Main --port=43110' >/data/local/tmp/silent-auto.log 2>&1 </dev/null &"
 ```
 
 ### 3. 配置大模型
@@ -597,7 +597,7 @@ TangoADB 只负责浏览器到手机的 ADB 通道：
 - 页面禁用或拦截了 Accessibility 文本设置。
 - 多任务并行时剪贴板被其他任务覆盖。
 
-ShadowAuto 的策略是优先 `ACTION_SET_TEXT`，失败后剪贴板粘贴，再失败才用 key event。
+Raphele 的策略是优先 `ACTION_SET_TEXT`，失败后剪贴板粘贴，再失败才用 key event。
 
 ### 为什么部分页面投屏黑屏？
 

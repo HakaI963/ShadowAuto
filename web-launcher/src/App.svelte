@@ -34,11 +34,11 @@
     { name: 'OPPO', url: 'https://jingyan.baidu.com/article/cb5d6105b0936a005d2fe052.html' },
     { name: 'VIVO', url: 'https://jingyan.baidu.com/article/335530da406f4358cb41c3b4.html' }
   ];
-  const repositoryUrl = 'https://github.com/android-notes/ShadowAuto';
+  const repositoryUrl = 'https://github.com/android-notes/Raphele';
 
   const copies: Record<Locale, Copy> = {
     zh: {
-      title: 'ShadowAuto 启动器',
+      title: 'Raphele 启动器',
       start: '启动隐控Assistant',
       starting: '启动中...',
       deviceBusy: '设备已被其他程序占用，请关闭 Android Studio 并杀死 adb 后再次重试。',
@@ -57,12 +57,12 @@
       failed: (message: string) => `启动失败：${message}`
     },
     en: {
-      title: 'ShadowAuto Launcher',
-      start: 'Start ShadowAuto Assistant',
+      title: 'Raphele Launcher',
+      start: 'Start Raphele Assistant',
       starting: 'Starting...',
       deviceBusy: 'The device is already in use. Please close Android Studio and kill adb, then retry.',
       unsupported: 'This browser does not support WebUSB ADB. Please use Chrome or Edge over HTTPS or localhost.',
-      ready: 'The ShadowAuto app is now open. Configure an API key before using phone automation, then enter a task and tap Run.',
+      ready: 'The Raphele app is now open. Configure an API key before using phone automation, then enter a task and tap Run.',
       repository: 'GitHub Repository',
       setupTitle: 'Before Connecting',
       setupNotes: [
@@ -186,7 +186,7 @@
   function progressTextEn(progress: LaunchProgress) {
     switch (progress.action) {
       case 'selectDevice':
-        return 'Select the phone to launch ShadowAuto';
+        return 'Select the phone to launch Raphele';
       case 'connectDevice':
         return `Connecting to ${progress.name}`;
       case 'download':
@@ -200,11 +200,11 @@
       case 'allowInstall':
         return 'Tap Allow on the phone when the install prompt appears';
       case 'installController':
-        return 'Reinstalling the ShadowAuto app';
+        return 'Reinstalling the Raphele app';
       case 'configureApiKey':
         return 'Configure an API key before using phone automation';
       case 'openController':
-        return 'Opening the ShadowAuto app';
+        return 'Opening the Raphele app';
     }
   }
 </script>

@@ -61,10 +61,10 @@ jobs:
           df -h "$GITHUB_WORKSPACE" | tail -2
           keytool -genkeypair -v \
             -keystore release.keystore \
-            -alias shadowauto \
+            -alias raphele \
             -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass shadowauto -keypass shadowauto \
-            -dname "CN=ShadowAuto, O=ShadowAuto, L=Unknown, ST=Unknown, C=US"
+            -storepass raphele -keypass raphele \
+            -dname "CN=Raphele, O=Raphele, L=Unknown, ST=Unknown, C=US"
           mkdir -p signed-apks
           echo "build-tools versions:"
           ls "$SDK_ROOT/build-tools"
@@ -99,12 +99,12 @@ jobs:
           [ -x "$APKSIGNER" ] || { echo "FATAL: apksigner not executable: $APKSIGNER"; exit 1; }
           for apk in signed-apks/*-release.apk; do
             echo "=== apksigner sign $apk ==="
-            "$APKSIGNER" sign --ks release.keystore --ks-pass pass:shadowauto --key-pass pass:shadowauto "$apk"
+            "$APKSIGNER" sign --ks release.keystore --ks-pass pass:raphele --key-pass pass:raphele "$apk"
             "$APKSIGNER" verify "$apk" && echo "verified $apk"
           done
           # Unified APK = controller UI + shell server + OCR assets + Shizuku starter.
           if [ -f signed-apks/controller-app-release.apk ]; then
-            cp signed-apks/controller-app-release.apk signed-apks/ShadowAuto-unified-release.apk
+            cp signed-apks/controller-app-release.apk signed-apks/Raphele-unified-release.apk
           fi
           ls -lh signed-apks
 
@@ -119,7 +119,7 @@ jobs:
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shadowauto-apks
+          name: raphele-apks
           path: |
             signed-apks/*.apk
             ocr-runtime.zip

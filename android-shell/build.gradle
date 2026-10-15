@@ -8,11 +8,11 @@ def enableOcr = providers.gradleProperty("enableOcr")
         .get()
 
 android {
-    namespace = "com.silentauto.shell"
+    namespace = "com.raphele.shell"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.silentauto.shell"
+        applicationId = "com.raphele.shell"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
@@ -70,7 +70,7 @@ if (enableOcr) {
     tasks.register("syncWebLauncherArtifacts", Copy) {
         dependsOn("copyTessOcrRuntime", ":controller-app:assembleDebug")
         from("build/outputs/apk/debug/android-shell-debug.apk") {
-            rename { "silent-shell.apk" }
+            rename { "raphele-shell.apk" }
             into(".")
         }
         from("../controller-app/build/outputs/apk/debug/controller-app-debug.apk") {
