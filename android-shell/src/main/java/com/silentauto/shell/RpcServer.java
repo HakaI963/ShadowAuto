@@ -14,6 +14,15 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 final class RpcServer {
+    /**
+     * RPC protocol/feature version. Bump whenever the controller app needs a
+     * newer server process to work (e.g. new methods). The app compares this
+     * with its own expected version and automatically restarts an outdated
+     * running server, so an old leftover process can never keep answering
+     * with "unknown method".
+     */
+    static final int SERVER_VERSION = 13;
+
     private final int port;
     private final AutomationEngine engine;
     private final LogHub logs;

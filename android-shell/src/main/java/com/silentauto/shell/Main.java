@@ -6,6 +6,8 @@ import android.os.Process;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 
 public final class Main {
     private static final String PROCESS_MARKER = "com.silentauto.shell.Main";
@@ -36,6 +38,7 @@ public final class Main {
         prepareLooper();
         killExistingShellProcesses();
         ShellContext.init();
+        ensurePortFree(config.port, logs);
         if (hasFlag(args, "--video-test")) {
             VideoTest.run(logs);
             return;
@@ -113,6 +116,77 @@ public final class Main {
             }
         }
         return false;
+    }
+
+    /**
+     * A leftover server (old APK daemon, manual app_process, or a previous
+     * Shizuku process) can still hold the RPC port and answer requests with
+     * missing methods. As shell UID we can kill those leftovers: retry a few
+     * times so a fresh server never silently loses the port race.
+     */
+    private static void ensurePortFree(int port, LogHub logs) {
+        for (int attempt = 0; attempt < 4; attempt++) {
+            if (portAvailable(port)) {
+                return;
+            }
+            killPortOwners(port, logs);
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException ignored) {
+                return;
+            }
+        }
+        if (!portAvailable(port)) {
+            logs.error("port " + port + " still busy after cleanup", null);
+        }
+    }
+
+    private static boolean portAvailable(int port) {
+        try (ServerSocket socket = new ServerSocket(port, 20, InetAddress.getByName("127.0.0.1"))) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static void killPortOwners(int port, LogHub logs) {
+        int currentPid = Process.myPid();
+        File[] entries = new File("/proc").listFiles();
+        if (entries == null) {
+            return;
+        }
+        String portArg = "--port=" + port;
+        for (File entry : entries) {
+            String name = entry.getName();
+            if (!isPid(name)) {
+                continue;
+            }
+            int pid;
+            try {
+                pid = Integer.parseInt(name);
+            } catch (NumberFormatException ignored) {
+                continue;
+            }
+            if (pid == currentPid) {
+                continue;
+            }
+            String commandLine = readCommandLine(new File(entry, "cmdline"));
+            if (commandLine.isEmpty() || !isServerProcess(commandLine, portArg)) {
+                continue;
+            }
+            logs.info("killing stale server process " + pid);
+            try {
+                Process.killProcess(pid);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static boolean isServerProcess(String commandLine, String portArg) {
+        return commandLine.contains(portArg)
+                || commandLine.contains("com.silentauto.shell.Main")
+                || commandLine.contains("com.silentauto.shell.ShellUserService")
+                || commandLine.contains("shadowauto-shell");
     }
 
     private static void killExistingShellProcesses() {

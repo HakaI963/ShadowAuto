@@ -44,6 +44,7 @@ final class AutomationTaskView {
     private AlertDialog screenDialog;
     private H264VideoDecoder dialogDecoder;
     private VideoConfig videoConfig;
+    private volatile boolean running;
 
     AutomationTaskView(Activity activity, Handler main, String taskId, Listener listener) {
         this.activity = activity;
@@ -159,6 +160,7 @@ final class AutomationTaskView {
             main.post(() -> setRunning(running));
             return;
         }
+        this.running = running;
         if (running) {
             hideKeyboard();
         }
@@ -166,6 +168,10 @@ final class AutomationTaskView {
         run.setEnabled(!running);
         run.setText(running ? activity.getString(R.string.running) : activity.getString(R.string.run));
         stop.setVisibility(running ? View.VISIBLE : View.GONE);
+    }
+
+    boolean isRunning() {
+        return running;
     }
 
     private void hideKeyboard() {

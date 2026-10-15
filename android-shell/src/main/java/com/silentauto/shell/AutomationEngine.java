@@ -638,6 +638,7 @@ final class AutomationEngine {
 
     synchronized JsonObject ocrStatusJson() {
         JsonObject object = new JsonObject();
+        object.addProperty("server_version", RpcServer.SERVER_VERSION);
         object.addProperty("ocr_root", TessOcrEngine.DEFAULT_ROOT);
         object.addProperty("diagnosis", ocrDiagnosis());
         object.addProperty("native_available", TessOcrEngine.isNativeAvailable());

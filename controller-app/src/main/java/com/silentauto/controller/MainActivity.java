@@ -48,6 +48,12 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
     private final Map<Integer, String> pendingGuides = new HashMap<>();
     private final Map<Integer, String> pendingStarts = new HashMap<>();
 
+    /** True while an outdated shell server is being replaced automatically. */
+    private volatile boolean serverUpdating;
+    /** One automatic update attempt per app process; manual Stop/Start stays available. */
+    private boolean autoUpdateAttempted;
+    private boolean outdatedNotified;
+
     private AiConfigStore configStore;
     private AiConfig config = new AiConfig("", "", "");
     private RpcClient rpcClient;
@@ -377,22 +383,29 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
             JSONObject error = object.optJSONObject("error");
             String message = error == null || error.optString("message").isEmpty()
                     ? "request failed" : error.optString("message");
+            if (message.contains("unknown method")) {
+                // The running server predates this app build (guideTask did not
+                // exist yet). Say how to fix it and try to heal it automatically.
+                message = message + " — " + getString(R.string.guide_outdated_hint);
+                main.post(this::maybeAutoUpdateServer);
+            }
+            final String detail = message;
             if (guideTaskId != null) {
                 AutomationTaskView task = taskById(guideTaskId);
                 if (task != null) {
-                    task.append("[guide failed] " + message);
-                    if (message.contains("unknown task")) {
+                    task.append("[guide failed] " + detail);
+                    if (detail.contains("unknown task")) {
                         task.setRunning(false);
                     }
                 } else {
-                    appendGlobal("[guide failed] " + message);
+                    appendGlobal("[guide failed] " + detail);
                 }
             } else if (startTaskId != null) {
-                reportRpcError(taskById(startTaskId), new Exception(message));
+                reportRpcError(taskById(startTaskId), new Exception(detail));
             } else {
-                appendGlobal("[rpc error] " + message);
+                appendGlobal("[rpc error] " + detail);
             }
-            main.post(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+            main.post(() -> Toast.makeText(this, detail, Toast.LENGTH_LONG).show());
             return;
         }
         if (guideTaskId != null) {
@@ -575,30 +588,41 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 });
                 return;
             }
-            main.post(() -> {
-                serverStarting = true;
-                actionStartMs = SystemClock.elapsedRealtime();
-                refreshServerStatus();
-            });
-            if (userServiceArgs == null) {
-                userServiceArgs = ShizukuServerManager.serviceArgs(this);
-            }
-            if (userServiceConn == null) {
-                userServiceConn = ShizukuServerManager.connection((ok, msg) -> main.post(() -> {
-                    serverStarting = false;
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-                    refreshServerStatus();
-                }), shellBinder);
-            }
-            ShizukuServerManager.startServer(this, userServiceArgs, userServiceConn,
-                    (ok, msg) -> main.post(() -> {
-                        serverStarting = false;
-                        if (!ok) {
-                            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                        }
-                        refreshServerStatus();
-                    }));
+            bindAndStartServer(false);
         });
+    }
+
+    /** Bind the Shizuku user service and wait for the RPC port to open. */
+    private void bindAndStartServer(boolean fromUpdate) {
+        main.post(() -> {
+            serverStarting = true;
+            actionStartMs = SystemClock.elapsedRealtime();
+            refreshServerStatus();
+        });
+        if (userServiceArgs == null) {
+            userServiceArgs = ShizukuServerManager.serviceArgs(this);
+        }
+        if (userServiceConn == null) {
+            userServiceConn = ShizukuServerManager.connection((ok, msg) -> main.post(() -> {
+                serverStarting = false;
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                refreshServerStatus();
+            }), shellBinder);
+        }
+        ShizukuServerManager.startServer(this, userServiceArgs, userServiceConn,
+                (ok, msg) -> main.post(() -> {
+                    serverStarting = false;
+                    if (ok && fromUpdate) {
+                        serverUpdating = false;
+                        Toast.makeText(this, getString(R.string.server_updated), Toast.LENGTH_SHORT).show();
+                    } else if (!ok) {
+                        serverUpdating = false;
+                        Toast.makeText(this,
+                                fromUpdate ? getString(R.string.server_update_failed, msg) : msg,
+                                Toast.LENGTH_LONG).show();
+                    }
+                    refreshServerStatus();
+                }));
     }
 
     private void onStopServerButton() {
@@ -707,8 +731,97 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 main.post(() -> renderServerStopped(state));
                 return;
             }
-            ShizukuServerManager.queryOcrStatus(ocr -> main.post(() -> renderServerRunning(ocr)));
+            ShizukuServerManager.queryOcrStatus(ocr -> main.post(() -> onRunningServerStatus(ocr)));
         });
+    }
+
+    /** Server is up: check its RPC version and heal an outdated process. */
+    private void onRunningServerStatus(ShizukuServerManager.OcrStatus ocr) {
+        boolean outdated = ocr.serverVersion < ShizukuServerManager.MIN_SERVER_VERSION;
+        if (outdated) {
+            maybeAutoUpdateServer();
+        }
+        renderServerRunning(ocr, outdated);
+    }
+
+    /**
+     * The running server process can predate this app build (leftover daemon
+     * or manual app_process). Old servers answer "unknown method: guideTask",
+     * so replace them automatically via Shizuku - unless a task is running
+     * (a restart would kill it) or Shizuku cannot restart it (say so in the
+     * status line instead).
+     */
+    private void maybeAutoUpdateServer() {
+        if (serverUpdating || serverStarting || serverStopping || autoUpdateAttempted) {
+            return;
+        }
+        if (anyTaskRunning()) {
+            return;
+        }
+        autoUpdateAttempted = true;
+        io.execute(() -> {
+            boolean canUpdate;
+            try {
+                canUpdate = ShizukuServerManager.isBinderAlive() && ShizukuServerManager.hasPermission();
+            } catch (Throwable ignored) {
+                canUpdate = false;
+            }
+            if (!canUpdate) {
+                main.post(this::notifyOutdatedServer);
+                return;
+            }
+            main.post(() -> {
+                serverUpdating = true;
+                serverStopping = true;
+                actionStartMs = SystemClock.elapsedRealtime();
+                Toast.makeText(this, getString(R.string.server_updating), Toast.LENGTH_LONG).show();
+                refreshServerStatus();
+            });
+            IBinder bound = shellBinder.get();
+            if (bound != null && userServiceArgs != null && userServiceConn != null) {
+                ShizukuServerManager.stopServer(bound, userServiceArgs, userServiceConn,
+                        (ok, msg) -> main.post(() -> onOldServerStopped(ok, msg)));
+            } else {
+                if (userServiceArgs == null) {
+                    userServiceArgs = ShizukuServerManager.serviceArgs(this);
+                }
+                ShizukuServerManager.ensureBoundThenStop(this, userServiceArgs, shellBinder,
+                        (ok, msg) -> main.post(() -> onOldServerStopped(ok, msg)));
+            }
+        });
+    }
+
+    private void onOldServerStopped(boolean ok, String msg) {
+        serverStopping = false;
+        if (!ok) {
+            serverUpdating = false;
+            Toast.makeText(this, getString(R.string.server_update_failed, msg), Toast.LENGTH_LONG).show();
+            refreshServerStatus();
+            return;
+        }
+        shellBinder.set(null);
+        userServiceConn = null;
+        markAllTasksStopped();
+        bindAndStartServer(true);
+    }
+
+    private void notifyOutdatedServer() {
+        if (outdatedNotified) {
+            return;
+        }
+        outdatedNotified = true;
+        Toast.makeText(this, getString(R.string.server_outdated_toast), Toast.LENGTH_LONG).show();
+    }
+
+    private boolean anyTaskRunning() {
+        synchronized (tasks) {
+            for (AutomationTaskView task : tasks) {
+                if (task.isRunning()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void watchdog() {
@@ -716,6 +829,7 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
                 && SystemClock.elapsedRealtime() - actionStartMs > ACTION_TIMEOUT_MS) {
             serverStarting = false;
             serverStopping = false;
+            serverUpdating = false;
             Toast.makeText(this, getString(R.string.action_timeout), Toast.LENGTH_LONG).show();
         }
     }
@@ -777,16 +891,21 @@ public final class MainActivity extends Activity implements AutomationTaskView.L
         }
     }
 
-    private void renderServerRunning(ShizukuServerManager.OcrStatus ocr) {
+    private void renderServerRunning(ShizukuServerManager.OcrStatus ocr, boolean outdated) {
         if (serverStatus == null) {
             return;
         }
         lastOcr = ocr;
         if (serverDot != null) {
-            serverDot.setBackgroundResource(R.drawable.dot_green);
+            serverDot.setBackgroundResource(outdated ? R.drawable.dot_yellow : R.drawable.dot_green);
         }
         if (serverStopping) {
             serverStatus.setText(getString(R.string.server_stopping));
+        } else if (serverUpdating) {
+            serverStatus.setText(getString(R.string.server_updating));
+        } else if (outdated) {
+            serverStatus.setText(getString(anyTaskRunning()
+                    ? R.string.server_outdated_busy : R.string.server_outdated));
         } else {
             serverStatus.setText(getString(R.string.server_running));
         }

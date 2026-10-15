@@ -34,7 +34,13 @@ public final class ShizukuServerManager {
     public static final String MANAGER_DOWNLOAD = "https://shizuku.rikka.app/download/";
     private static final String SERVICE_CLASS = "com.silentauto.shell.ShellUserService";
     private static final String SERVICE_TAG = "shadowauto-shell";
-    private static final int SERVICE_VERSION = 12;
+    private static final int SERVICE_VERSION = 13;
+    /**
+     * Minimum shell RpcServer.SERVER_VERSION that supports the methods this
+     * app uses (guideTask etc.). Keep in sync with the shell constant when
+     * shipping; the app auto-restarts any running server below this.
+     */
+    public static final int MIN_SERVER_VERSION = 13;
     private static final AtomicInteger IDS = new AtomicInteger(1000);
 
     public interface Callback {
@@ -44,6 +50,7 @@ public final class ShizukuServerManager {
     public static final class OcrStatus {
         public boolean serverUp;
         public boolean available;
+        public int serverVersion;
         public String error = "";
         public String diagnosis = "";
     }
@@ -348,6 +355,7 @@ public final class ShizukuServerManager {
                             continue;
                         }
                         JSONObject result = response.getJSONObject("result");
+                        status.serverVersion = result.optInt("server_version", 0);
                         status.available = result.optBoolean("ocr_available", false);
                         status.error = result.optString("error", "");
                         status.diagnosis = result.optString("diagnosis", "");
@@ -356,7 +364,10 @@ public final class ShizukuServerManager {
                     }
                 }
             } catch (Throwable e) {
-                status.serverUp = false;
+                // Server answered the port probe but not the version query:
+                // it is an old build. Keep serverUp true with serverVersion 0
+                // so the app treats it as outdated and restarts it.
+                status.error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             }
             callback.onStatus(status);
         }, "ocr-status-query").start();
